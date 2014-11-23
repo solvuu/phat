@@ -1,0 +1,126 @@
+open build/OCaml
+DefineCommandVars()
+
+.PHONY: lib doc \
+        install_lib uninstall_lib \
+        clean distclean
+
+clean:
+  rm -rf _build
+
+distclean: clean
+  rm -rf OMakefile.omc OMakeroot.omc .omakedb .omakedb.lock
+
+
+################################################################################
+# General Project Information
+PROJECT = phat
+VERSION = '"0.1-dev"'
+DESCRIPTION = '"File paths and file system operations."'
+
+if $(test -e .git)
+  GIT_COMMIT = 'Some "$(shell git rev-parse HEAD)"'
+  export
+else
+  GIT_COMMIT = 'None'
+  export
+
+LIB_NAME = $(PROJECT)
+LIB_MODULES[] =
+  $(removesuffix $(removesuffix $(basename $(ls lib/*.ml))))
+  $(removesuffix $(removesuffix $(basename $(ls lib/*.ml.m4))))
+LIB_PACKAGES = core threads async sexplib.syntax
+
+
+################################################################################
+# Build Parameters
+USE_OCAMLFIND = true
+if $(not $(OCAMLFIND_EXISTS))
+  eprintln(This project requires ocamlfind, but it was not found.)
+  eprintln(You need to install ocamlfind and run "omake --configure".)
+  exit 1
+
+NATIVE_ENABLED = $(OCAMLOPT_EXISTS)
+BYTE_ENABLED = $(OCAMLC_EXISTS)
+
+OCAMLFLAGS = -bin-annot -annot -w A-4-33-41-42-44-45-48 -thread -short-paths -safe-string -g
+OCAMLCFLAGS =
+OCAMLOPTFLAGS =
+OCAML_LINK_FLAGS +=
+OCAML_BYTE_LINK_FLAGS =
+OCAML_NATIVE_LINK_FLAGS =
+OCAMLFINDFLAGS =
+
+
+################################################################################
+# Sub-directories
+.SUBDIRS: .
+  mkdir -p _build/lib
+  mkdir -p _build/doc
+  vmount(-l, lib/, _build/lib/)
+
+  ##############################################################################
+  # Library
+  .SUBDIRS: _build/lib
+    OCAMLFINDFLAGS += -syntax camlp4o
+    OCAMLPACKS[] = $(LIB_PACKAGES)
+
+    %.ml: %.ml.m4 :value: $(VERSION) :value: $(GIT_COMMIT)
+      m4 -D VERSION=$(VERSION) -D GIT_COMMIT=$(GIT_COMMIT) $< > $@
+
+    %.mli: %.mli.m4 :value: $(VERSION) :value: $(GIT_COMMIT)
+      m4 -D VERSION=$(VERSION) -D GIT_COMMIT=$(GIT_COMMIT) $< > $@
+
+    lib: $(OCamlLibrary $(LIB_NAME), $(LIB_MODULES))
+
+    .DEFAULT: lib
+
+
+  ##############################################################################
+  # Documentation
+  .SUBDIRS: _build/doc
+
+    api/index.html: ../lib/$(LIB_NAME).cma
+      rm -rf api
+      mkdir api
+      cp $(PROJECT).css api/
+      cp img/* api/
+      ocamlfind ocamldoc \
+        -package $(concat \,, $(LIB_PACKAGES)) \
+        -charset UTF-8 \
+        -d api \
+        -t "$(PROJECT) $(VERSION)" \
+        -keep-code \
+        -colorize-code \
+        -sort \
+        -I ../lib \
+        -thread \
+        ../lib/*.mli ../lib/*.ml
+
+    doc: api/index.html
+
+
+################################################################################
+# Install and Uninstall
+# - support for findlib and OPAM
+
+if $(not $(defined OPAM_PACKAGE_NAME))
+  OPAM_PACKAGE_NAME = $(PROJECT)
+  export
+
+_build/META:
+  echo "description = \"$(DESCRIPTION)\"" > $@
+  echo "version = \"$(VERSION)\"" >> $@
+  echo "requires = \"$(LIB_PACKAGES)\"" >> $@
+  echo "archive(byte) = \"$(LIB_NAME).cma\"" >> $@
+  echo "archive(native) = \"$(LIB_NAME).cmxa\"" >> $@
+
+install_lib: uninstall_lib _build/META
+  ocamlfind install $(PROJECT) \
+    _build/META \
+    _build/lib/*.cm[aix] \
+    _build/lib/*.cmx[as] \
+    _build/lib/$(LIB_NAME).a
+
+uninstall_lib:
+  ocamlfind remove $(PROJECT)
