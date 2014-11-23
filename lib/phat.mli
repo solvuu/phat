@@ -52,14 +52,17 @@ type rel (** relative path, phantom type *)
 type file (** regular file, phantom type *)
 type dir (** directory, phantom type *)
 
-type ('absrel,'kind) path =
-| Root : (abs,dir) path
-| File : name -> (rel,file) path
-| Dir : name -> (rel,dir) path
-| Link : name * ('absrel,'kind) path -> ('absrel,'kind) path
-| Dot : (rel,dir) path
-| Dotdot : (rel,dir) path
-| Concat : ('absrel,dir) path * (rel,'kind) path -> ('absrel,'kind) path
+type ('absrel,'kind) item =
+| Root : (abs,dir) item
+| File : name -> (rel,file) item
+| Dir : name -> (rel,dir) item
+| Link : name * ('absrel,'kind) path -> ('absrel,'kind) item
+| Dot : (rel,dir) item
+| Dotdot : (rel,dir) item
+
+and ('absrel,'kind) path =
+| Item : ('absrel,'kind) item -> ('absrel,'kind) path
+| Cons : ('absrel,dir) item * (rel,'kind) path -> ('absrel,'kind) path
 
 
 (** {2 Constructors, Converters} *)
@@ -86,40 +89,11 @@ val to_list : (_,_) path -> string list
 
 val to_string : (_,_) path -> string
 
-(** Follow all links. Returned value guaranteed not to contain any
-    instance of [Link]. *)
-val resolve_links : ('absrel, 'kind) path -> ('absrel,'kind) path
-
 
 (** {2 Path Manipulation} *)
 
+val concat : ('absrel,dir) path -> (rel,'kind) path -> ('absrel,'kind) path
 
-(** {2 Items}
-
-    Alternative API in which file paths are represented as a private
-    string list. Used internally to implement the GADT API and is
-    exposed here mostly for debugging purposes.
-
-    End-users are unlikely to ever need the {!items} type provided
-    here. You can just use {!to_string_list} to attain almost the same
-    thing.
-*)
-
-(** Single component of a path. Either a {!name} or a reserved item
-    such as ".", "..", and "/". *)
-type item = private string
-
-(** A list of items represents a path. The list cannot be empty. *)
-type items = private item list
-
-(** Parse an item. *)
-val item : string -> item Or_error.t
-
-(** Parse items. *)
-val items : string -> items Or_error.t
-
-val to_items : (_,_) path -> items
-val dir_of_items : items -> (abs,dir) path Or_error.t
-val file_of_items : items -> (abs,file) path Or_error.t
-val rel_dir_of_items : items -> (rel,dir) path Or_error.t
-val rel_file_of_items : items -> (rel,file) path Or_error.t
+(** Follow all links. Returned value guaranteed not to contain any
+    instance of [Link]. *)
+val resolve_links : ('absrel, 'kind) path -> ('absrel,'kind) path

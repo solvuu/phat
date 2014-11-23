@@ -2,11 +2,37 @@ open Core.Std
 open Phat_core2
 open Result.Monad_infix
 
+(* Many functions not tail-recursive. Considered okay because paths
+   are unlikely to be very long.
+*)
+
 (******************************************************************************)
-(* Names                                                                      *)
+(* Types                                                                      *)
 (******************************************************************************)
 type name = string with sexp
 
+type abs
+type rel
+
+type dir
+type file
+
+type ('absrel,'kind) item =
+| Root : (abs,dir) item
+| File : name -> (rel,file) item
+| Dir : name -> (rel,dir) item
+| Link : name * ('absrel,'kind) path -> ('absrel,'kind) item
+| Dot : (rel,dir) item
+| Dotdot : (rel,dir) item
+
+and ('absrel,'kind) path =
+| Item : ('absrel,'kind) item -> ('absrel,'kind) path
+| Cons : ('absrel,dir) item * (rel,'kind) path -> ('absrel,'kind) path
+
+
+(******************************************************************************)
+(* Names                                                                      *)
+(******************************************************************************)
 let name s =
   if String.mem s '/' then
     error "slash not allowed in file or directory name" s sexp_of_string
@@ -17,159 +43,186 @@ let name s =
 
 
 (******************************************************************************)
-(* Items                                                                      *)
+(* Path manipulation                                                          *)
 (******************************************************************************)
-type item = string with sexp
-type items = item list with sexp
-
-let item s =
-  match s with
-  | "/" | "" | "." | ".." -> Ok s
-  | _ -> name s
-
-let items (s:string) : items Or_error.t =
-  match s with
-  | "" -> Or_error.error_string "invalid empty path"
-  | "/" -> Ok ["/"]
-  | _ ->
-    let s,leading_slash = match String.chop_prefix s ~prefix:"/" with
-      | None -> s,false
-      | Some s -> s,true
-    in
-    Result.List.map ~f:item (String.split s ~on:'/')
-    >>| fun l ->
-    if leading_slash then "/"::l else l
+let rec concat : type absrel kind .
+  (absrel,dir) path -> (rel,kind) path -> (absrel,kind) path
+  = fun x y ->
+    match x with
+    | Item x -> Cons (x,y)
+    | Cons (x1,x2) -> Cons (x1, concat x2 y)
 
 
 (******************************************************************************)
-(* GADT and constructors                                                      *)
+(* Elems - internal use only                                             *)
 (******************************************************************************)
-type abs
-type rel
+module Elem : sig
 
-type dir
-type file
+  (** Like [item], an [elem] represents a single component of a path
+      but is less strongly typed. It is a string guaranteed to be
+      either a [name] or ".", "", "..", or "/". *)
+  type elem = private string
 
-type ('absrel,'kind) path =
-| Root : (abs,dir) path
-| File : name -> (rel,file) path
-| Dir : name -> (rel,dir) path
-| Link : name * ('absrel,'kind) path -> ('absrel,'kind) path
-| Dot : (rel,dir) path
-| Dotdot : (rel,dir) path
-| Concat : ('absrel,dir) path * (rel,'kind) path -> ('absrel,'kind) path
+  (** List guaranteed to be non-empty. *)
+  type elems = private elem list
 
-let root = Root
+(*  val elem : string -> elem Or_error.t  # Avoid unused warning *)
+  val elems : string -> elems Or_error.t
 
-(** Internal helper function used in other parsers below. Returned
-    list will not be empty. *)
-let rec to_items : type a b . (a,b) path -> items = function
-  | Root -> ["/"]
-  | Dir x -> [x]
-  | File x -> [x]
-  | Link (x,_) -> [x]
-  | Dot -> ["."]
-  | Dotdot -> [".."]
-  | Concat (dir,relpath) -> (to_items dir)@(to_items relpath)
+  val item_to_elem : (_,_) item -> elem
 
-let rel_dir_of_items items : (rel,dir) path Or_error.t =
-  match items with
-  | [] -> assert false
-  | hd::tl -> (
-    (
-      match hd with
-      | "/" ->
-        error "relative path cannot begin with root directory"
-          items sexp_of_items
-      | "" | "." -> Ok Dot
-      | ".." -> Ok Dotdot
-      | _ -> Ok (Dir hd)
-    ) >>= fun init ->
-    Result.List.fold tl ~init ~f:(fun accum item ->
-      match item with
-      | "/" ->
+  val rel_dir_of_elems : elems -> (rel,dir) path Or_error.t
+  val dir_of_elems : elems -> (abs,dir) path Or_error.t
+  val rel_file_of_elems : elems -> (rel,file) path Or_error.t
+  val file_of_elems : elems -> (abs,file) path Or_error.t
+
+end = struct
+  type elem = string with sexp
+  type elems = elem list with sexp
+
+  let elem s = match s with
+    | "/" | "" | "." | ".." -> Ok s
+    | _ -> name s
+
+  let elems = function
+    | "" -> Or_error.error_string "invalid empty path"
+    | "/" -> Ok ["/"]
+    | s ->
+      let s,leading_slash = match String.chop_prefix s ~prefix:"/" with
+        | None -> s,false
+        | Some s -> s,true
+      in
+      Result.List.map ~f:elem (String.split s ~on:'/')
+      >>| fun l ->
+      if leading_slash then "/"::l else l
+
+  let item_to_elem : type a b . (a,b) item -> elem = function
+    | Root -> "/"
+    | Dir x -> x
+    | File x -> x
+    | Link (x,_) -> x
+    | Dot -> "."
+    | Dotdot -> ".."
+
+  let rel_dir_of_elems elems : (rel,dir) path Or_error.t =
+    match elems with
+    | [] -> assert false
+    | "/"::_ ->
+      error "relative path cannot begin with root directory"
+        elems sexp_of_elems
+    | _::tl ->
+      if List.mem tl "/" then
         error "root directory can only occur as first item in path"
-          items sexp_of_items
-      | "" | "." -> Ok (Concat (accum, Dot))
-      | ".." -> Ok (Concat (accum, Dotdot))
-      | _ -> Ok (Concat (accum, Dir item))
-    )
-  )
+          elems sexp_of_elems
+      else
+        let item = function
+          | "/" -> assert false
+          | "" | "." -> Dot
+          | ".." -> Dotdot
+          | x -> (Dir x)
+        in
+        let rec loop = function
+          | [] -> assert false
+          | x::[] -> Item (item x)
+          | x::elems -> Cons (item x, loop elems)
+        in
+        Ok (loop elems)
 
-let dir_of_items items : (abs,dir) path Or_error.t =
-  match items with
-  | [] -> assert false
-  | "/"::items ->
-    Result.List.fold items ~init:root ~f:(fun accum item ->
-      match item with
-      | "/" ->
+  let dir_of_elems elems : (abs,dir) path Or_error.t =
+    match elems with
+    | [] -> assert false
+    | "/"::tl -> (
+      if List.mem tl "/" then
         error "root directory can only occur as first item in path"
-          items sexp_of_items
-      | "" | "." -> Ok (Concat (accum, Dot))
-      | ".." -> Ok (Concat (accum, Dotdot))
-      | _ -> Ok (Concat (accum, Dir item))
+          elems sexp_of_elems
+      else (
+        rel_dir_of_elems tl >>| fun reldir ->
+        Cons (Root, reldir)
+      )
     )
-  | _ ->
-    error "absolute path must begin with root directory"
-      items sexp_of_items
-
-let rel_file_of_items items : (rel,file) path Or_error.t =
-  match items with
-  | [] -> assert false
-  | "/"::_ ->
-    error "relative path cannot begin with root directory"
-      items sexp_of_items
-  | _ -> (
-    let items_rev = List.rev items in
-    let last = List.hd_exn items_rev in
-    let items = List.rev (List.tl_exn items_rev) in
-    match last with
-    | "." | "" | ".." ->
-      error "path cannot be treated as file" items sexp_of_items
     | _ ->
-      match items with
-      | [] -> Ok (File last)
+      error "absolute path must begin with root directory"
+        elems sexp_of_elems
+
+  let rel_file_of_elems elems : (rel,file) path Or_error.t =
+    match elems with
+    | [] -> assert false
+    | "/"::_ ->
+      error "relative path cannot begin with root directory"
+        elems sexp_of_elems
+    | _ -> (
+      let elems_rev = List.rev elems in
+      let last = List.hd_exn elems_rev in
+      let elems = List.rev (List.tl_exn elems_rev) in
+      match last with
+      | "." | "" | ".." ->
+        error "path cannot be treated as file" elems sexp_of_elems
       | _ ->
-        rel_dir_of_items items >>| fun dir ->
-        Concat (dir, File last)
-  )
+        match elems with
+        | [] -> Ok (Item (File last))
+        | _ ->
+          rel_dir_of_elems elems >>| fun dir ->
+          concat dir (Item (File last))
+    )
 
-let file_of_items items : (abs,file) path Or_error.t =
-  match items with
-  | [] -> assert false
-  | "/"::[] ->
-    error "root directory cannot be treated as file" items sexp_of_items
-  | "/"::rest-> (
-    let rest_rev = List.rev rest in
-    let last = List.hd_exn rest_rev in
-    let rest = List.rev (List.tl_exn rest_rev) in
-    match last with
-    | "." | "" | ".." ->
-      error "path cannot be treated as file" items sexp_of_items
+  let file_of_elems elems : (abs,file) path Or_error.t =
+    match elems with
+    | [] -> assert false
+    | "/"::[] ->
+      error "root directory cannot be treated as file"
+        elems sexp_of_elems
+    | "/"::rest-> (
+      let rest_rev = List.rev rest in
+      let last = List.hd_exn rest_rev in
+      let rest = List.rev (List.tl_exn rest_rev) in
+      match last with
+      | "." | "" | ".." ->
+        error "path cannot be treated as file" elems sexp_of_elems
+      | _ ->
+        dir_of_elems ("/"::rest) >>| fun dir ->
+        concat dir (Item (File last))
+    )
     | _ ->
-      dir_of_items ("/"::rest) >>| fun dir ->
-      Concat (dir, File last)
-  )
-  | _ ->
-    error "absolute path must begin with root directory"
-      items sexp_of_items
+      error "absolute path must begin with root directory"
+        elems sexp_of_elems
 
-let rel_dir_path s = items s >>= rel_dir_of_items
-let dir_path s = items s >>= dir_of_items
-let rel_file_path s = items s >>= rel_file_of_items
-let file_path s = items s >>= file_of_items
+end
+open Elem
 
-let to_list = to_items
 
-let to_string t = to_items t |> String.concat ~sep:"/"
+(******************************************************************************)
+(* Path constructors                                                          *)
+(******************************************************************************)
+let root = Item Root
+let rel_dir_path s = elems s >>= rel_dir_of_elems
+let dir_path s = elems s >>= dir_of_elems
+let rel_file_path s = elems s >>= rel_file_of_elems
+let file_path s = elems s >>= file_of_elems
+
+
+(******************************************************************************)
+(* Path converters                                                            *)
+(******************************************************************************)
+let rec to_elem_list : type a b . (a,b) path -> elem list = function
+  | Item x -> [item_to_elem x]
+  | Cons (item,path) -> (item_to_elem item)::(to_elem_list path)
+
+let to_list path = (to_elem_list path :> string list)
+
+let to_string t = to_list t |> String.concat ~sep:"/"
 
 (* TODO: check for infinite loops *)
-let rec resolve_links : type a b . (a,b) path -> (a,b) path = fun x ->
-  match x with
-  | Root -> x
-  | File _ -> x
-  | Dir _ -> x
-  | Link (_, target) -> resolve_links target
-  | Dot -> x
-  | Dotdot -> x
-  | Concat (dir,relpath) -> Concat (resolve_links dir, resolve_links relpath)
+let rec resolve_links : type a b . (a,b) path -> (a,b) path =
+  let resolve_item_links : type a b . (a,b) item -> (a,b) path = fun x ->
+    match x with
+    | Root -> Item x
+    | File _ -> Item x
+    | Dir _ -> Item x
+    | Link (_, target) -> resolve_links target
+    | Dot -> Item x
+    | Dotdot -> Item x
+  in
+  function
+  | Item x -> resolve_item_links x
+  | Cons (item,path) ->
+    concat (resolve_item_links item) (resolve_links path)
