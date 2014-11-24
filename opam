@@ -1,0 +1,28 @@
+opam-version: "1.2"
+version: "dev"
+maintainer: "agarwal1975@gmail.com"
+homepage: "https://github.com/solvuu/phat"
+bug-reports: "https://github.com/solvuu/phat/issues"
+license: "ISC"
+
+build: [
+  "omake" "-j%{jobs}%"
+]
+
+install: [
+  ["omake" "install"]
+]
+
+remove: [
+  ["ocamlfind" "remove" "phat"]
+]
+
+depends: [
+  "ocamlfind" {build}
+  "omake" {build}
+  "core" {>= "111.13.00"}
+  "async"
+  "sexplib"
+]
+
+ocaml-version: [ >= "4.01.0" ]
