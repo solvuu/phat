@@ -6,8 +6,8 @@
     empty string "" is equivalent to ".", and both are parsed to
     [Dot].
 
-    We represent such a list with type {!t}, which has 2 phantom type
-    parameters:
+    We represent such a list with type {!path}, which has 2 phantom
+    type parameters:
 
     - `absrel: is either [abs] or [rel]. The first item in an absolute
     path is "/", the root directory. The first item in a relative path

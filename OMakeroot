@@ -83,9 +83,8 @@ OCAMLFINDFLAGS =
     api/index.html: ../lib/$(LIB_NAME).cma
       rm -rf api
       mkdir api
-      cp $(PROJECT).css api/
-      cp img/* api/
       ocamlfind ocamldoc \
+        -syntax camlp4o \
         -package $(concat \,, $(LIB_PACKAGES)) \
         -charset UTF-8 \
         -d api \
@@ -95,6 +94,7 @@ OCAMLFINDFLAGS =
         -sort \
         -I ../lib \
         -thread \
+        -html \
         ../lib/*.mli ../lib/*.ml
 
     doc: api/index.html
