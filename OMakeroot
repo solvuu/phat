@@ -15,8 +15,8 @@ distclean: clean
 ################################################################################
 # General Project Information
 PROJECT = phat
-VERSION = '"0.1-dev"'
-DESCRIPTION = '"File paths and file system operations."'
+VERSION = 0.1-dev
+DESCRIPTION = File paths and file system operations.
 
 if $(test -e .git)
   GIT_COMMIT = 'Some "$(shell git rev-parse HEAD)"'
@@ -108,7 +108,7 @@ if $(not $(defined OPAM_PACKAGE_NAME))
   OPAM_PACKAGE_NAME = $(PROJECT)
   export
 
-_build/META:
+_build/META: :value: $(VERSION) :value: $(DESCRIPTION)
   echo "description = \"$(DESCRIPTION)\"" > $@
   echo "version = \"$(VERSION)\"" >> $@
   echo "requires = \"$(LIB_PACKAGES)\"" >> $@
