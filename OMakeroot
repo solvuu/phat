@@ -2,7 +2,7 @@ open build/OCaml
 DefineCommandVars()
 
 .PHONY: lib doc \
-        install_lib uninstall_lib \
+        install uninstall \
         clean distclean
 
 clean:
@@ -115,12 +115,13 @@ _build/META:
   echo "archive(byte) = \"$(LIB_NAME).cma\"" >> $@
   echo "archive(native) = \"$(LIB_NAME).cmxa\"" >> $@
 
-install_lib: uninstall_lib _build/META
+install: uninstall _build/META
   ocamlfind install $(PROJECT) \
+    _build/lib/*.mli \
     _build/META \
     _build/lib/*.cm[aix] \
     _build/lib/*.cmx[as] \
     _build/lib/$(LIB_NAME).a
 
-uninstall_lib:
+uninstall:
   ocamlfind remove $(PROJECT)
