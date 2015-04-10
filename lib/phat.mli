@@ -64,6 +64,9 @@ and ('absrel,'kind) path =
 | Item : ('absrel,'kind) item -> ('absrel,'kind) path
 | Cons : ('absrel,dir) item * (rel,'kind) path -> ('absrel,'kind) path
 
+type file_path = (abs,file) path
+type dir_path = (abs,dir) path
+
 
 (** {2 Constructors, Converters} *)
 
