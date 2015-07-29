@@ -134,6 +134,7 @@ end = struct
   let dir_of_elems elems : (abs,dir) path Or_error.t =
     match elems with
     | [] -> assert false
+    | "/"::[] -> Ok (Item Root)
     | "/"::tl -> (
       if List.mem tl "/" then
         error "root directory can only occur as first item in path"
