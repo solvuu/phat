@@ -230,3 +230,13 @@ let rec resolve_links : type a b . (a,b) path -> (a,b) path =
   | Item x -> resolve_item_links x
   | Cons (item,path) ->
     concat (resolve_item_links item) (resolve_links path)
+
+let rec parent : type a b . (a,b) path -> (a,dir) path =
+  fun path -> match path with
+  | Item Root -> path
+  | Item (File _) -> Item Dot
+  | Item (Dir _) -> Item Dot
+  | Item (Link (_,path)) -> parent path
+  | Item Dot -> Item Dotdot
+  | Item Dotdot -> Cons (Dotdot, path)
+  | Cons (item,path) -> Cons(item, parent path)

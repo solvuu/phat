@@ -100,3 +100,5 @@ val concat : ('absrel,dir) path -> (rel,'kind) path -> ('absrel,'kind) path
 (** Follow all links. Returned value guaranteed not to contain any
     instance of [Link]. *)
 val resolve_links : ('absrel, 'kind) path -> ('absrel,'kind) path
+
+val parent : ('absrel,_) path -> ('absrel,dir) path
