@@ -30,16 +30,16 @@
     naming choices often exclude "abs"; it is implied that "path"
     means "absolute path".
 
-    A normalized path contains the minimum number of [Dot]s and
-    [Dotdot]s possible. For an absolute path, this means there are no
-    [Dot]s or [Dotdot]s. For a relative path, it means [Dot]s and
-    [Dotdot]s occur only in cases where the path is: a lone [Dot],
-    only one or more [Dotdot]s, or the first item is a directory
-    followed only by one or more [Dotdot]s.
+    A normalized path does not contain any links and contains the
+    minimum number of [Dot]s and [Dotdot]s possible. For an absolute
+    path, this means there are no [Dot]s or [Dotdot]s. For a relative
+    path, it means [Dot]s and [Dotdot]s occur only in cases where the
+    path is: a lone [Dot], or a consecutive sequence of [Dotdot]s at
+    the beginning followed by only named items.
 
     Windows paths are not supported, but that would be a simple
     extension if anyone requests it.
-*)
+ *)
 open Core.Std
 
 (** User chosen file or directory name. By "user chosen" we mean to
@@ -91,6 +91,8 @@ val rel_file_path : string -> (rel,file) path Or_error.t
 val to_list : (_,_) path -> string list
 
 val to_string : (_,_) path -> string
+
+val normalize : ('absrel,'kind) path -> ('absrel,'kind) path
 
 
 (** {2 Path Manipulation} *)

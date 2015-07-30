@@ -240,3 +240,37 @@ let rec parent : type a b . (a,b) path -> (a,dir) path =
   | Item Dot -> Item Dotdot
   | Item Dotdot -> Cons (Dotdot, path)
   | Cons (item,path) -> Cons(item, parent path)
+
+let rec normalize : type a b . (a,b) path -> (a,b) path =
+  fun path -> match path with
+    | Item Root -> path
+    | Item (File _) -> path
+    | Item (Dir _) -> path
+    | Item Dot -> path
+    | Item Dotdot -> path
+    | Item (Link (_,path)) -> normalize path
+    | Cons (dir,path) ->
+      let path = normalize path in
+      match dir, path with
+      | _, Item (Link _) -> assert false
+      | _, Cons (Link _, _) -> assert false
+      | _, Cons (Dot, _) -> assert false
+      | Link(_,dir), _ -> normalize (concat dir path)
+      | Root, Item (File _) -> Cons(dir,path)
+      | Root, Item (Dir _) -> Cons(dir,path)
+      | Root, Item Dot -> Item Root
+      | Root, Item Dotdot -> Item Root
+      | Root, Cons(Dir _, _) -> Cons(dir,path)
+      | Root, Cons(Dotdot, path) -> normalize (Cons(Root,path))
+      | Dir _, Item (File _) -> Cons(dir,path)
+      | Dir _, Item (Dir _) -> Cons(dir,path)
+      | Dir _, Item Dot -> Item dir
+      | Dir _, Item Dotdot -> Item Dot
+      | Dir _, Cons(Dir _, _) -> Cons(dir,path)
+      | Dir _, Cons(Dotdot, path) -> path
+      | Dot, _ -> path
+      | Dotdot, Item (File _) -> Cons(dir,path)
+      | Dotdot, Item (Dir _) -> Cons(dir,path)
+      | Dotdot, Item Dot -> Item Dotdot
+      | Dotdot, Item Dotdot -> Cons(dir,path)
+      | Dotdot, Cons _ -> Cons(dir,path)
