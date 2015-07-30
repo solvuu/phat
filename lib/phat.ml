@@ -46,7 +46,7 @@ let name s =
 
 
 (******************************************************************************)
-(* Path manipulation                                                          *)
+(* Operators                                                                  *)
 (******************************************************************************)
 let rec concat : type absrel kind .
   (absrel,dir) path -> (rel,kind) path -> (absrel,kind) path
@@ -54,6 +54,66 @@ let rec concat : type absrel kind .
     match x with
     | Item x -> Cons (x,y)
     | Cons (x1,x2) -> Cons (x1, concat x2 y)
+
+(* TODO: check for infinite loops *)
+let rec resolve_links : type a b . (a,b) path -> (a,b) path =
+  let resolve_item_links : type a b . (a,b) item -> (a,b) path = fun x ->
+    match x with
+    | Root -> Item x
+    | File _ -> Item x
+    | Dir _ -> Item x
+    | Link (_, target) -> resolve_links target
+    | Dot -> Item x
+    | Dotdot -> Item x
+  in
+  function
+  | Item x -> resolve_item_links x
+  | Cons (item,path) ->
+    concat (resolve_item_links item) (resolve_links path)
+
+let rec parent : type a b . (a,b) path -> (a,dir) path =
+  fun path -> match path with
+  | Item Root -> path
+  | Item (File _) -> Item Dot
+  | Item (Dir _) -> Item Dot
+  | Item (Link (_,path)) -> parent path
+  | Item Dot -> Item Dotdot
+  | Item Dotdot -> Cons (Dotdot, path)
+  | Cons (item,path) -> Cons(item, parent path)
+
+let rec normalize : type a b . (a,b) path -> (a,b) path =
+  fun path -> match path with
+    | Item Root -> path
+    | Item (File _) -> path
+    | Item (Dir _) -> path
+    | Item Dot -> path
+    | Item Dotdot -> path
+    | Item (Link (_,path)) -> normalize path
+    | Cons (dir,path) ->
+      let path = normalize path in
+      match dir, path with
+      | _, Item (Link _) -> assert false
+      | _, Cons (Link _, _) -> assert false
+      | _, Cons (Dot, _) -> assert false
+      | Link(_,dir), _ -> normalize (concat dir path)
+      | Root, Item (File _) -> Cons(dir,path)
+      | Root, Item (Dir _) -> Cons(dir,path)
+      | Root, Item Dot -> Item Root
+      | Root, Item Dotdot -> Item Root
+      | Root, Cons(Dir _, _) -> Cons(dir,path)
+      | Root, Cons(Dotdot, path) -> normalize (Cons(Root,path))
+      | Dir _, Item (File _) -> Cons(dir,path)
+      | Dir _, Item (Dir _) -> Cons(dir,path)
+      | Dir _, Item Dot -> Item dir
+      | Dir _, Item Dotdot -> Item Dot
+      | Dir _, Cons(Dir _, _) -> Cons(dir,path)
+      | Dir _, Cons(Dotdot, path) -> path
+      | Dot, _ -> path
+      | Dotdot, Item (File _) -> Cons(dir,path)
+      | Dotdot, Item (Dir _) -> Cons(dir,path)
+      | Dotdot, Item Dot -> Item Dotdot
+      | Dotdot, Item Dotdot -> Cons(dir,path)
+      | Dotdot, Cons _ -> Cons(dir,path)
 
 
 (******************************************************************************)
@@ -195,7 +255,7 @@ open Elem
 
 
 (******************************************************************************)
-(* Path constructors                                                          *)
+(* Constructors                                                               *)
 (******************************************************************************)
 let root = Item Root
 let rel_dir_path s = elems s >>= rel_dir_of_elems
@@ -205,7 +265,7 @@ let file_path s = elems s >>= file_of_elems
 
 
 (******************************************************************************)
-(* Path converters                                                            *)
+(* Deconstructors                                                             *)
 (******************************************************************************)
 let rec to_elem_list : type a b . (a,b) path -> elem list = function
   | Item x -> [item_to_elem x]
@@ -217,63 +277,3 @@ let to_string t =
   to_list t |> function
   | "/"::path -> "/" ^ (String.concat ~sep:"/" path)
   | path -> String.concat ~sep:"/" path
-
-(* TODO: check for infinite loops *)
-let rec resolve_links : type a b . (a,b) path -> (a,b) path =
-  let resolve_item_links : type a b . (a,b) item -> (a,b) path = fun x ->
-    match x with
-    | Root -> Item x
-    | File _ -> Item x
-    | Dir _ -> Item x
-    | Link (_, target) -> resolve_links target
-    | Dot -> Item x
-    | Dotdot -> Item x
-  in
-  function
-  | Item x -> resolve_item_links x
-  | Cons (item,path) ->
-    concat (resolve_item_links item) (resolve_links path)
-
-let rec parent : type a b . (a,b) path -> (a,dir) path =
-  fun path -> match path with
-  | Item Root -> path
-  | Item (File _) -> Item Dot
-  | Item (Dir _) -> Item Dot
-  | Item (Link (_,path)) -> parent path
-  | Item Dot -> Item Dotdot
-  | Item Dotdot -> Cons (Dotdot, path)
-  | Cons (item,path) -> Cons(item, parent path)
-
-let rec normalize : type a b . (a,b) path -> (a,b) path =
-  fun path -> match path with
-    | Item Root -> path
-    | Item (File _) -> path
-    | Item (Dir _) -> path
-    | Item Dot -> path
-    | Item Dotdot -> path
-    | Item (Link (_,path)) -> normalize path
-    | Cons (dir,path) ->
-      let path = normalize path in
-      match dir, path with
-      | _, Item (Link _) -> assert false
-      | _, Cons (Link _, _) -> assert false
-      | _, Cons (Dot, _) -> assert false
-      | Link(_,dir), _ -> normalize (concat dir path)
-      | Root, Item (File _) -> Cons(dir,path)
-      | Root, Item (Dir _) -> Cons(dir,path)
-      | Root, Item Dot -> Item Root
-      | Root, Item Dotdot -> Item Root
-      | Root, Cons(Dir _, _) -> Cons(dir,path)
-      | Root, Cons(Dotdot, path) -> normalize (Cons(Root,path))
-      | Dir _, Item (File _) -> Cons(dir,path)
-      | Dir _, Item (Dir _) -> Cons(dir,path)
-      | Dir _, Item Dot -> Item dir
-      | Dir _, Item Dotdot -> Item Dot
-      | Dir _, Cons(Dir _, _) -> Cons(dir,path)
-      | Dir _, Cons(Dotdot, path) -> path
-      | Dot, _ -> path
-      | Dotdot, Item (File _) -> Cons(dir,path)
-      | Dotdot, Item (Dir _) -> Cons(dir,path)
-      | Dotdot, Item Dot -> Item Dotdot
-      | Dotdot, Item Dotdot -> Cons(dir,path)
-      | Dotdot, Cons _ -> Cons(dir,path)

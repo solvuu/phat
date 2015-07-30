@@ -68,7 +68,7 @@ type file_path = (abs,file) path
 type dir_path = (abs,dir) path
 
 
-(** {2 Constructors, Converters} *)
+(** {2 Constructors} *)
 
 (** Unix root directory "/". *)
 val root : (abs,dir) path
@@ -88,14 +88,16 @@ val rel_dir_path : string -> (rel,dir) path Or_error.t
 (** Parse a relative file path. *)
 val rel_file_path : string -> (rel,file) path Or_error.t
 
-val to_list : (_,_) path -> string list
 
+(** {2 Deconstructors} *)
+
+val to_list : (_,_) path -> string list
 val to_string : (_,_) path -> string
 
+
+(** {2 Operators} *)
+
 val normalize : ('absrel,'kind) path -> ('absrel,'kind) path
-
-
-(** {2 Path Manipulation} *)
 
 val concat : ('absrel,dir) path -> (rel,'kind) path -> ('absrel,'kind) path
 
