@@ -115,6 +115,35 @@ let rec normalize : type a b . (a,b) path -> (a,b) path =
       | Dotdot, Item Dotdot -> Cons(dir,path)
       | Dotdot, Cons _ -> Cons(dir,path)
 
+let equal p q =
+  let equal_item : type a b . (a,b) item -> (a,b) item -> bool =
+    fun p q -> match p,q with
+      | Root, Root -> true
+      | Root, _ -> false
+      | _, Root -> false
+      | File p, File q -> String.equal p q
+      | File _, _ -> false
+      | _, File _ -> false
+      | Dir p, Dir q -> String.equal p q
+      | Dir _, _ -> false
+      | _, Dir _ -> false
+      | Link _, _ -> assert false
+      | _, Link _ -> assert false
+      | Dot, Dot -> true
+      | Dot, _ -> false
+      | _, Dot -> false
+      | Dotdot, Dotdot -> true
+  in
+  let rec equal_normalized : type a b . (a,b) path -> (a,b) path -> bool =
+    fun p q -> match p,q with
+    | Item _, Cons _ -> false
+    | Cons _, Item _ -> false
+    | Item p, Item q -> equal_item p q
+    | Cons(p_dir,p_path), Cons(q_dir,q_path) ->
+      (equal_item p_dir q_dir) && (equal_normalized p_path q_path)
+  in
+  equal_normalized (normalize p) (normalize q)
+
 
 (******************************************************************************)
 (* Elems - internal use only                                             *)

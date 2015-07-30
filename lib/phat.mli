@@ -37,6 +37,13 @@
     path is: a lone [Dot], or a consecutive sequence of [Dotdot]s at
     the beginning followed by only named items.
 
+    Paths are semantically [equal] if they ultimately point to the
+    same location. Only paths of the same type can be tested for
+    equality. It is assumed that a relative path is always different
+    from an absolute path, and a file path is always different from a
+    directory path even though their string representations might be
+    equal.
+
     Windows paths are not supported, but that would be a simple
     extension if anyone requests it.
  *)
@@ -66,6 +73,8 @@ and ('absrel,'kind) path =
 
 type file_path = (abs,file) path
 type dir_path = (abs,dir) path
+
+val equal : ('absrel,'kind) path -> ('absrel,'kind) path -> bool
 
 
 (** {2 Constructors} *)
