@@ -213,7 +213,10 @@ let rec to_elem_list : type a b . (a,b) path -> elem list = function
 
 let to_list path = (to_elem_list path :> string list)
 
-let to_string t = to_list t |> String.concat ~sep:"/"
+let to_string t =
+  to_list t |> function
+  | "/"::path -> "/" ^ (String.concat ~sep:"/" path)
+  | path -> String.concat ~sep:"/" path
 
 (* TODO: check for infinite loops *)
 let rec resolve_links : type a b . (a,b) path -> (a,b) path =
