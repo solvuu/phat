@@ -146,7 +146,6 @@ let rec normalize : type a b . (a,b) path -> (a,b) path =
       | AR, Root, Cons (RR, Dotdot, path) -> normalize (Cons (cons, Root, path))
       | AR, Root, Item Dot -> Item Root
       | AR, Root, Item Dotdot -> Item Root
-      | AR, Root, Cons (_, Root, _) -> assert false (* !!! shouldn't exist !!! *)
 
 let equal p q =
   let equal_item : type a b . (a,b) item -> (a,b) item -> bool =
