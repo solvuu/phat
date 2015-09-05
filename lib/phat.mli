@@ -65,17 +65,21 @@ type (_,_,_) cons =
   | AR : (abs,rel,abs) cons
   | AA : (abs,abs,abs) cons
 
-type ('absrel,'kind) item =
-| Root : (abs,dir) item
-| File : name -> (rel,file) item
-| Dir : name -> (rel,dir) item
-| Link : name * ('absrel,'kind) path -> ('absrel,'kind) item
-| Dot : (rel,dir) item
-| Dotdot : (rel,dir) item
+type ('kind,'obj) item =
+  | Root : (abs,dir) item
+  | File : name -> (rel,file) item
+  | Dir : name -> (rel,dir) item
+  | Link : name * (_,'obj) path -> (rel,'obj) item
+  | Dot : (rel,dir) item
+  | Dotdot : (rel,dir) item
 
-and ('absrel,'kind) path =
-| Item : ('absrel,'kind) item -> ('absrel,'kind) path
-| Cons : ('a,'b,'c) cons * ('a,dir) item * ('b,'kind) path -> ('c,'kind) path
+and ('kind,'obj) path =
+  | Item : ('kind,'obj) item -> ('kind,'obj) path
+  | Cons : ('a,'b,'c) cons * ('a,dir) item * ('b,'obj) path -> ('c,'obj) path
+
+type _ some_kind_of_path =
+  | Abs_path : (abs,'a) path -> 'a some_kind_of_path
+  | Rel_path : (rel,'a) path -> 'a some_kind_of_path
 
 type file_path = (abs,file) path
 type dir_path = (abs,dir) path
@@ -122,6 +126,6 @@ val concat :
 
 (** Follow all links. Returned value guaranteed not to contain any
     instance of [Link]. *)
-val resolve_links : ('absrel, 'kind) path -> ('absrel,'kind) path
+val resolve : ('k, 'o) path -> 'o some_kind_of_path
 
 val parent : ('absrel,_) path -> ('absrel,dir) path
