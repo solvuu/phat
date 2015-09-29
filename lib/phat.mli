@@ -127,3 +127,7 @@ val resolve : (abs, 'o) path -> (abs, 'o) path
 val resolve_any : ('k, 'o) path -> 'o some_kind_of_path
 
 val parent : ('absrel, _) path -> ('absrel, dir) path
+
+(** {2 Operations on file systems} *)
+
+val exists : (abs, _) path -> [ `Yes | `Unknown | `No ]
