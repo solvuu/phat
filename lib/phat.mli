@@ -122,6 +122,8 @@ val concat : ('a, dir) path -> (rel, 'kind) path -> ('a, 'kind) path
 
 (** Follow all links. Returned value guaranteed not to contain any
     instance of [Link]. *)
-val resolve : ('k, 'o) path -> 'o some_kind_of_path
+val resolve : (abs, 'o) path -> (abs, 'o) path
+
+val resolve_any : ('k, 'o) path -> 'o some_kind_of_path
 
 val parent : ('absrel, _) path -> ('absrel, dir) path

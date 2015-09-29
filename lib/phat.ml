@@ -60,11 +60,11 @@ let rec concat
     | Item x -> Cons (x,y)
     | Cons (x1,x2) -> Cons (x1, concat x2 y)
 
-let rec resolve : type k o. (k,o) path -> o some_kind_of_path =
+let rec resolve_any : type k o. (k,o) path -> o some_kind_of_path =
   function
   | Item x -> resolve_item x
   | Cons (item, path) ->
-    match resolve_item item, resolve path with
+    match resolve_item item, resolve_any path with
     | Rel_path x, Rel_path y -> Rel_path (concat x y)
     | _, Abs_path y -> Abs_path y
     | Abs_path x, Rel_path y -> Abs_path (concat x y)
@@ -74,9 +74,17 @@ and resolve_item : type k o . (k,o) item -> o some_kind_of_path = fun x ->
   | Root -> Abs_path (Item x)
   | File _ -> Rel_path (Item x)
   | Dir _ -> Rel_path (Item x)
-  | Link (_, target) -> resolve target
+  | Link (_, target) -> resolve_any target
   | Dot -> Rel_path (Item x)
   | Dotdot -> Rel_path (Item x)
+
+and resolve : type o. (abs,o) path -> (abs, o) path =
+  function
+  | Item Root as x -> x
+  | Cons (Root as x, path) ->
+    match resolve_any path with
+    | Abs_path y -> y
+    | Rel_path y -> Cons (x, y)
 
 let rec parent : type a b . (a,b) path -> (a,dir) path =
   fun path -> match path with
