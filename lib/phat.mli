@@ -9,13 +9,13 @@
     We represent such a list with type {!path}, which has 2 phantom
     type parameters:
 
-    - `absrel: is either [abs] or [rel]. The first item in an absolute
+    - 'kind: is either [abs] or [rel]. The first item in an absolute
     path is "/", the root directory. The first item in a relative path
     is guaranteed not to be "/".
 
-    - 'kind: is either [file] or [dir] and indicates the type of the
-    path. This is a property of the last item in a path. Every
-    non-last item must be a directory.
+    - 'obj: is either [file] or [dir] and indicates the type of the
+    object identified by the path. This is a property of the last item
+    in a path. Every non-last item must be a directory.
 
     These phantom types restrict operations in sensible ways. For
     example, you can request the items under a directory but not under
@@ -30,23 +30,29 @@
     naming choices often exclude "abs"; it is implied that "path"
     means "absolute path".
 
-    A normalized path does not contain any links and contains the
-    minimum number of [Dot]s and [Dotdot]s possible. For an absolute
-    path, this means there are no [Dot]s or [Dotdot]s. For a relative
-    path, it means [Dot]s and [Dotdot]s occur only in cases where the
-    path is: a lone [Dot], or a consecutive sequence of [Dotdot]s at
-    the beginning followed by only named items.
+    A normalized path contains the minimum number of [Dot]s and
+    [Dotdot]s possible. For an absolute path, this means there are no
+    [Dot]s or [Dotdot]s. For a relative path, it means [Dot]s and
+    [Dotdot]s occur only in cases where the path is: a lone [Dot], or
+    a consecutive sequence of [Dotdot]s at the beginning followed by
+    only named items.
 
-    Paths are semantically [equal] if they ultimately point to the
-    same location. Only paths of the same type can be tested for
-    equality. It is assumed that a relative path is always different
-    from an absolute path, and a file path is always different from a
-    directory path even though their string representations might be
-    equal.
+    A resolved path does not contain any links. Resolving a path means
+    to replace occuring links by the path they represent. The kind of
+    the path may change in the process: a relative path may become
+    absolute after resolution (converse not true). However, resolving
+    a path will not change the type of the object it identifies.
+
+    Paths are semantically [equal] if they point to the same location,
+    even after resolution. Only paths of the same type can be tested
+    for equality. It is assumed that a relative path is always
+    different from an absolute path, and a file path is always
+    different from a directory path even though their string
+    representations might be equal.
 
     Windows paths are not supported, but that would be a simple
     extension if anyone requests it.
- *)
+*)
 open Core.Std
 
 (** User chosen file or directory name. By "user chosen" we mean to
@@ -71,9 +77,9 @@ and ('kind,'obj) path =
   | Item : ('kind,'obj) item -> ('kind,'obj) path
   | Cons : ('a,dir) item * (rel,'obj) path -> ('a,'obj) path
 
-type _ some_kind_of_path =
-  | Abs_path : (abs,'a) path -> 'a some_kind_of_path
-  | Rel_path : (rel,'a) path -> 'a some_kind_of_path
+type 'a some_kind_of_path =
+  | Abs_path of (abs,'a) path
+  | Rel_path of (rel,'a) path
 
 type file_path = (abs,file) path
 type dir_path = (abs,dir) path
@@ -84,33 +90,33 @@ val equal : ('absrel,'kind) path -> ('absrel,'kind) path -> bool
 (** {2 Constructors} *)
 
 (** Unix root directory "/". *)
-val root : (abs,dir) path
+val root : (abs, dir) path
 
 (** Parse a name. *)
 val name : string -> name Or_error.t
 
 (** Parse an absolute directory path. *)
-val dir_path : string -> (abs,dir) path Or_error.t
+val dir_path : string -> (abs, dir) path Or_error.t
 
 (** Parse an absolute file path. *)
-val file_path : string -> (abs,file) path Or_error.t
+val file_path : string -> (abs, file) path Or_error.t
 
 (** Parse a relative directory path. *)
-val rel_dir_path : string -> (rel,dir) path Or_error.t
+val rel_dir_path : string -> (rel, dir) path Or_error.t
 
 (** Parse a relative file path. *)
-val rel_file_path : string -> (rel,file) path Or_error.t
+val rel_file_path : string -> (rel, file) path Or_error.t
 
 
 (** {2 Deconstructors} *)
 
-val to_list : (_,_) path -> string list
-val to_string : (_,_) path -> string
+val to_list : (_, _) path -> string list
+val to_string : (_, _) path -> string
 
 
 (** {2 Operators} *)
 
-val normalize : ('absrel,'kind) path -> ('absrel,'kind) path
+val normalize : ('absrel, 'kind) path -> ('absrel, 'kind) path
 
 val concat : ('a, dir) path -> (rel, 'kind) path -> ('a, 'kind) path
 
@@ -118,4 +124,4 @@ val concat : ('a, dir) path -> (rel, 'kind) path -> ('a, 'kind) path
     instance of [Link]. *)
 val resolve : ('k, 'o) path -> 'o some_kind_of_path
 
-val parent : ('absrel,_) path -> ('absrel,dir) path
+val parent : ('absrel, _) path -> ('absrel, dir) path
