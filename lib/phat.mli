@@ -131,3 +131,5 @@ val parent : ('absrel, _) path -> ('absrel, dir) path
 (** {2 Operations on file systems} *)
 
 val exists : (abs, _) path -> [ `Yes | `Unknown | `No ]
+
+val stat : (abs, _) path -> Unix.stats Or_error.t

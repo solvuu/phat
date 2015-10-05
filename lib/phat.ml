@@ -380,3 +380,14 @@ and exists_rel_path
             exists_rel_path
               (Filename.concat p_abs (Elem.item_to_elem x :> string))
               y) (x, y)
+
+let sexp_of_unix_error =
+  Tuple.T3.sexp_of_t
+    Unix.sexp_of_error
+    sexp_of_string
+    sexp_of_string
+
+let stat p =
+  try Ok (Unix.stat (to_string p))
+  with Unix.Unix_error (e, fn, msg) ->
+    error "Phat.stat" (e, fn, msg) sexp_of_unix_error
