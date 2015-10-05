@@ -53,83 +53,79 @@
     Windows paths are not supported, but that would be a simple
     extension if anyone requests it.
 *)
-open Core.Std
+open Core_kernel.Std
 
 (** User chosen file or directory name. By "user chosen" we mean to
     exclude reserved names such as ".", "", "..", and "/". *)
 type name = private string
 
-type abs (** absolute path, phantom type *)
-type rel (** relative path, phantom type *)
+type abs = [`abs] (** absolute path, phantom type *)
+type rel = [`rel] (** relative path, phantom type *)
 
-type file (** regular file, phantom type *)
-type dir (** directory, phantom type *)
+type file = [`file] (** regular file, phantom type *)
+type dir  = [`dir]  (** directory, phantom type *)
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
-  | Link : name * (_,'obj) path -> (rel,'obj) item
+  | Link : name * (_,'obj) t -> (rel,'obj) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
-and ('kind,'obj) path =
-  | Item : ('kind,'obj) item -> ('kind,'obj) path
-  | Cons : ('a,dir) item * (rel,'obj) path -> ('a,'obj) path
+and ('kind,'obj) t =
+  | Item : ('kind,'obj) item -> ('kind,'obj) t
+  | Cons : ('a,dir) item * (rel,'obj) t -> ('a,'obj) t
 
-type 'a some_kind_of_path =
-  | Abs_path of (abs,'a) path
-  | Rel_path of (rel,'a) path
+type 'a of_some_kind =
+  | Abs_path of (abs,'a) t
+  | Rel_path of (rel,'a) t
 
-type file_path = (abs,file) path
-type dir_path = (abs,dir) path
+type file_path = (abs,file) t
+type dir_path = (abs,dir) t
 
-val equal : ('absrel,'kind) path -> ('absrel,'kind) path -> bool
+val equal : ('absrel,'kind) t -> ('absrel,'kind) t -> bool
 
 
 (** {2 Constructors} *)
 
 (** Unix root directory "/". *)
-val root : (abs, dir) path
+val root : (abs, dir) t
 
 (** Parse a name. *)
 val name : string -> name Or_error.t
 
 (** Parse an absolute directory path. *)
-val dir_path : string -> (abs, dir) path Or_error.t
+val dir_path : string -> (abs, dir) t Or_error.t
 
 (** Parse an absolute file path. *)
-val file_path : string -> (abs, file) path Or_error.t
+val file_path : string -> (abs, file) t Or_error.t
 
 (** Parse a relative directory path. *)
-val rel_dir_path : string -> (rel, dir) path Or_error.t
+val rel_dir_path : string -> (rel, dir) t Or_error.t
 
 (** Parse a relative file path. *)
-val rel_file_path : string -> (rel, file) path Or_error.t
+val rel_file_path : string -> (rel, file) t Or_error.t
 
 
 (** {2 Deconstructors} *)
 
-val to_list : (_, _) path -> string list
-val to_string : (_, _) path -> string
+val to_list : (_, _) t -> string list
+val to_string : (_, _) t -> string
 
+val string_of_item : (_, _) item -> string
 
 (** {2 Operators} *)
 
-val normalize : ('absrel, 'kind) path -> ('absrel, 'kind) path
+val normalize : ('absrel, 'kind) t -> ('absrel, 'kind) t
 
-val concat : ('a, dir) path -> (rel, 'kind) path -> ('a, 'kind) path
+val concat : ('a, dir) t -> (rel, 'kind) t -> ('a, 'kind) t
 
 (** Follow all links. Returned value guaranteed not to contain any
     instance of [Link]. *)
-val resolve : (abs, 'o) path -> (abs, 'o) path
+val resolve : (abs, 'o) t -> (abs, 'o) t
 
-val resolve_any : ('k, 'o) path -> 'o some_kind_of_path
+val resolve_any : ('k, 'o) t -> 'o of_some_kind
 
-val parent : ('absrel, _) path -> ('absrel, dir) path
+val parent : ('absrel, _) t -> ('absrel, dir) t
 
-(** {2 Operations on file systems} *)
-
-val exists : (abs, _) path -> [ `Yes | `Unknown | `No ]
-
-val stat : (abs, _) path -> Unix.stats Or_error.t

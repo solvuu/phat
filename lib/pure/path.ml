@@ -1,5 +1,5 @@
-open Core.Std
-open Phat_core2
+open Core_kernel.Std
+open Core2
 open Result.Monad_infix
 
 (* Many functions not tail-recursive. Considered okay because paths
@@ -11,30 +11,30 @@ open Result.Monad_infix
 (******************************************************************************)
 type name = string with sexp
 
-type abs
-type rel
+type abs = [`abs]
+type rel = [`rel]
 
-type dir
-type file
+type dir = [`dir]
+type file = [`file]
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
-  | Link : name * (_,'obj) path -> (rel,'obj) item
+  | Link : name * (_,'obj) t -> (rel,'obj) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
-and ('kind,'obj) path =
-  | Item : ('kind,'obj) item -> ('kind,'obj) path
-  | Cons : ('a,dir) item * (rel,'obj) path -> ('a,'obj) path
+and ('kind,'obj) t =
+  | Item : ('kind,'obj) item -> ('kind,'obj) t
+  | Cons : ('a,dir) item * (rel,'obj) t -> ('a,'obj) t
 
-type 'a some_kind_of_path =
-  | Abs_path of (abs,'a) path
-  | Rel_path of (rel,'a) path
+type 'a of_some_kind =
+  | Abs_path of (abs,'a) t
+  | Rel_path of (rel,'a) t
 
-type file_path = (abs,file) path
-type dir_path = (abs,dir) path
+type file_path = (abs,file) t
+type dir_path = (abs,dir) t
 
 
 (******************************************************************************)
@@ -54,13 +54,13 @@ let name s =
 (******************************************************************************)
 
 let rec concat
-  : type a kind. (a,dir) path -> (rel, kind) path -> (a,kind) path
+  : type a kind. (a,dir) t -> (rel, kind) t -> (a,kind) t
   = fun x y ->
     match x with
     | Item x -> Cons (x,y)
     | Cons (x1,x2) -> Cons (x1, concat x2 y)
 
-let rec resolve_any : type k o. (k,o) path -> o some_kind_of_path =
+let rec resolve_any : type k o. (k,o) t -> o of_some_kind =
   function
   | Item x -> resolve_item x
   | Cons (item, path) ->
@@ -69,7 +69,7 @@ let rec resolve_any : type k o. (k,o) path -> o some_kind_of_path =
     | _, Abs_path y -> Abs_path y
     | Abs_path x, Rel_path y -> Abs_path (concat x y)
 
-and resolve_item : type k o . (k,o) item -> o some_kind_of_path = fun x ->
+and resolve_item : type k o . (k,o) item -> o of_some_kind = fun x ->
   match x with
   | Root -> Abs_path (Item x)
   | File _ -> Rel_path (Item x)
@@ -78,7 +78,7 @@ and resolve_item : type k o . (k,o) item -> o some_kind_of_path = fun x ->
   | Dot -> Rel_path (Item x)
   | Dotdot -> Rel_path (Item x)
 
-and resolve : type o. (abs,o) path -> (abs, o) path =
+and resolve : type o. (abs,o) t -> (abs, o) t =
   function
   | Item Root as x -> x
   | Cons (Root as x, path) ->
@@ -86,7 +86,7 @@ and resolve : type o. (abs,o) path -> (abs, o) path =
     | Abs_path y -> y
     | Rel_path y -> Cons (x, y)
 
-let rec parent : type a b . (a,b) path -> (a,dir) path =
+let rec parent : type a b . (a,b) t -> (a,dir) t =
   fun path -> match path with
   | Item Root -> path
   | Item (File _) -> Item Dot
@@ -96,7 +96,7 @@ let rec parent : type a b . (a,b) path -> (a,dir) path =
   | Item Dotdot -> Cons (Dotdot, path)
   | Cons (item, path) -> Cons(item, parent path)
 
-let rec normalize : type a b . (a,b) path -> (a,b) path =
+let rec normalize : type a b . (a,b) t -> (a,b) t =
   fun path -> match path with
     | Item _ -> path
     | Cons (dir, path) ->
@@ -109,10 +109,10 @@ let rec normalize : type a b . (a,b) path -> (a,b) path =
 
 
 let rec equal
-  : type a b c d. (a,b) path -> (c,d) path -> bool
+  : type a b c d. (a,b) t -> (c,d) t -> bool
   = fun p q -> equal_normalized (normalize p) (normalize q)
 
-and equal_normalized : type a b c d. (a,b) path -> (c,d) path -> bool =
+and equal_normalized : type a b c d. (a,b) t -> (c,d) t -> bool =
     fun p q -> match p,q with
     | Item p, Item q -> equal_item p q
     | Cons(p_dir,p_path), Cons(q_dir,q_path) ->
@@ -158,10 +158,10 @@ module Elem : sig
 
   val item_to_elem : (_,_) item -> elem
 
-  val rel_dir_of_elems : elems -> (rel,dir) path Or_error.t
-  val dir_of_elems : elems -> (abs,dir) path Or_error.t
-  val rel_file_of_elems : elems -> (rel,file) path Or_error.t
-  val file_of_elems : elems -> (abs,file) path Or_error.t
+  val rel_dir_of_elems : elems -> (rel,dir) t Or_error.t
+  val dir_of_elems : elems -> (abs,dir) t Or_error.t
+  val rel_file_of_elems : elems -> (rel,file) t Or_error.t
+  val file_of_elems : elems -> (abs,file) t Or_error.t
 
 end = struct
   type elem = string with sexp
@@ -191,7 +191,7 @@ end = struct
     | Dot -> "."
     | Dotdot -> ".."
 
-  let rel_dir_of_elems elems : (rel,dir) path Or_error.t =
+  let rel_dir_of_elems elems : (rel,dir) t Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::_ ->
@@ -215,7 +215,7 @@ end = struct
         in
         Ok (loop elems)
 
-  let dir_of_elems elems : (abs,dir) path Or_error.t =
+  let dir_of_elems elems : (abs,dir) t Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::[] -> Ok (Item Root)
@@ -232,7 +232,7 @@ end = struct
       error "absolute path must begin with root directory"
         elems sexp_of_elems
 
-  let rel_file_of_elems elems : (rel,file) path Or_error.t =
+  let rel_file_of_elems elems : (rel,file) t Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::_ ->
@@ -253,7 +253,7 @@ end = struct
           concat dir (Item (File last))
     )
 
-  let file_of_elems elems : (abs,file) path Or_error.t =
+  let file_of_elems elems : (abs,file) t Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::[] ->
@@ -291,7 +291,7 @@ let file_path s = elems s >>= file_of_elems
 (******************************************************************************)
 (* Deconstructors                                                             *)
 (******************************************************************************)
-let rec to_elem_list : type a b . (a,b) path -> elem list = function
+let rec to_elem_list : type a b . (a,b) t -> elem list = function
   | Item x -> [item_to_elem x]
   | Cons (item, path) -> (item_to_elem item) :: (to_elem_list path)
 
@@ -302,92 +302,4 @@ let to_string t =
   | "/"::path -> "/" ^ (String.concat ~sep:"/" path)
   | path -> String.concat ~sep:"/" path
 
-let file_exists = Sys.file_exists ~follow_symlinks:false
-let is_file = Sys.is_file ~follow_symlinks:false
-let is_directory = Sys.is_directory ~follow_symlinks:false
-
-let and_check f x e =
-  match e with
-  | `Yes -> f x
-  | `No -> `No
-  | `Unknown -> `Unknown
-
-let is_link p =
-  let p_is_a_link () =
-    Unix.(if (stat p).st_kind = S_LNK then `Yes else `No)
-  in
-  file_exists p
-  |> and_check p_is_a_link ()
-
-let some_kind_of_path
-  : type k o. (k, o) path -> o some_kind_of_path
-  = fun path ->
-    match path with
-    | Item Root -> Abs_path path
-    | Item Dot -> Rel_path path
-    | Item Dotdot -> Rel_path path
-    | Item (File _) -> Rel_path path
-    | Item (Dir _) -> Rel_path path
-    | Item (Link _) -> Rel_path path
-    | Cons (Root, _) -> Abs_path path
-    | Cons (Dot, _) -> Rel_path path
-    | Cons (Dotdot, _) -> Rel_path path
-    | Cons (Dir _, _) -> Rel_path path
-    | Cons (Link _, _) -> Rel_path path
-
-let rec exists
-  : type o. (abs, o) path -> [ `Yes | `Unknown | `No ]
-  =
-  function
-  | Item Root -> `Yes
-  | Cons (Root, p_rel) -> exists_rel_path "/" p_rel
-
-and exists_item
-    : type o. string -> (rel, o) item -> [ `Yes | `Unknown | `No ]
-    =
-    fun p_abs p_rel ->
-      match p_rel with
-      | Dot -> `Yes
-      | Dotdot -> `Yes
-      | File f ->
-        let p_abs' = Filename.concat p_abs f in
-        file_exists p_abs'
-        |> and_check is_file p_abs'
-      | Dir d ->
-        let p_abs' = Filename.concat p_abs d in
-        file_exists p_abs'
-        |> and_check is_directory p_abs'
-      | Link (l, target) ->
-        let target_exists () =
-          match some_kind_of_path target with
-          | Abs_path p -> exists p
-          | Rel_path p -> exists_rel_path p_abs p
-        in
-        let p_abs' = Filename.concat p_abs l in
-        file_exists p_abs'
-        |> and_check is_link p_abs'
-        |> and_check target_exists ()
-
-and exists_rel_path
-    : type o. string -> (rel, o) path -> [ `Yes | `Unknown | `No ]
-    =
-    fun p_abs p_rel ->
-      match p_rel with
-      | Item x -> exists_item p_abs x
-      | Cons (x, y) ->
-        exists_item p_abs x
-        |> and_check (fun (x,y) ->
-            exists_rel_path
-              (Filename.concat p_abs (Elem.item_to_elem x :> string))
-              y) (x, y)
-
-let sexp_of_unix_error =
-  Tuple.T3.sexp_of_t
-    Unix.sexp_of_error
-    sexp_of_string
-    sexp_of_string
-
-let stat p =
-  try Ok (Unix.stat (to_string p))
-  with Unix.Unix_error (e, fn, msg) ->
-    error "Phat.stat" (e, fn, msg) sexp_of_unix_error
+let string_of_item x = (Elem.item_to_elem x :> string)
