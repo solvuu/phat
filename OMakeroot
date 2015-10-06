@@ -11,6 +11,8 @@ PACKAGES(x) =
     return core_kernel sexplib.syntax
   case unix
     return $(PACKAGES pure) core
+  case run_ounit_tests
+    return $(PACKAGES unix) oUnit
   default
     eprintln(PACKAGES undefined for $(x).)
     exit(1)
@@ -21,6 +23,8 @@ LIB_DEPS(x) =
     return $(EMPTY)
   case unix
     return pure
+  case run_ounit_tests
+    return pure unix
   default
     eprintln(LIB_DEPS undefined for $(x).)
     exit(1)
@@ -34,3 +38,7 @@ CheckErrors()
 .SUBDIRS: .
   foreach(x => ..., $(LIBS))
     OCamlLibrary($(x))
+
+.SUBDIRS: .
+  foreach(x => ..., $(APPS))
+    OCamlApp($(x))

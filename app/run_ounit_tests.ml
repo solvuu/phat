@@ -1,6 +1,7 @@
 open Core.Std
 open OUnit2
-open Phat
+open Phat_unix.Std
+open Path
 
 let random_char () =
   let a = Char.to_int 'a' in
@@ -50,7 +51,7 @@ let not_names = [
 
 let name_constructor _ =
   List.iter not_names ~f:(fun n ->
-      match Phat.name n with
+      match Path.name n with
       | Ok _ ->
         let msg = sprintf "String %s was accepted as a valid name" n in
         assert_failure msg
