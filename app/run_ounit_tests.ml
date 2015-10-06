@@ -40,6 +40,18 @@ and random_rel_dir_path () =
   else
     Item d
 
+and random_path_with_link () =
+  let link = match random_dir_path () with
+    | Abs_path p -> Link (random_name (), p)
+    | Rel_path p -> Link (random_name (), p)
+  in
+  if Random.float 1. < 0.1 then
+    Rel_path (Item link)
+  else
+    match random_dir_path () with
+    | Abs_path dir -> Abs_path (concat dir (Item link))
+    | Rel_path dir -> Rel_path (concat dir (Item link))
+
 let not_names = [
   "foo/" ;
   "/foo" ;
@@ -94,10 +106,34 @@ let normalization_is_idempotent _ =
     | Rel_path dir -> check dir
   done
 
+
+let resolution_eliminates_links _ =
+  let check_aux p p_res =
+    let msg =
+      sprintf
+        "Path %s was resolved into %s"
+        (Sexp.to_string (Path.sexp_of_t p))
+        (Sexp.to_string (Path.sexp_of_t p_res))
+    in
+    assert_bool msg (not (has_link p_res))
+  in
+  let check p =
+    match resolve_any p with
+    | Abs_path p_res -> check_aux p p_res
+    | Rel_path p_res -> check_aux p p_res
+  in
+  for _ = 1 to 1000 do
+    match random_dir_path () with
+    | Abs_path dir -> check dir
+    | Rel_path dir -> check dir
+  done
+
+
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
     "Normalization" >:: normalization ;
     "Normalization is idempotent" >:: normalization_is_idempotent ;
+    "Resolution eliminates links" >:: resolution_eliminates_links ;
   ]
 
 
