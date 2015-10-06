@@ -19,10 +19,9 @@ let rec random_rel_dir_item ?(no_link = false) () =
     if no_link || b then
       Dir (random_name ())
     else (
-      let f p = Link (random_name (), p) in
-      match random_dir_path () with
-      | Abs_path p -> f p
-      | Rel_path p -> f p
+      map_any_kind (random_dir_path ()) { map = fun p ->
+          Link (random_name (), p)
+        }
     )
   | false, true -> Dot
   | false, false -> Dotdot
@@ -45,10 +44,7 @@ and random_rel_dir_path ?no_link () =
 (* [random_path_resolving_to p] generates a path that resolves to what
    [p] resolves (the name is a tiny bit misleading) *)
 and random_path_resolving_to p () =
-  let link = match p with
-    | Abs_path p -> Link (random_name (), p)
-    | Rel_path p -> Link (random_name (), p)
-  in
+  let link = map_any_kind p { map = fun p -> Link (random_name (), p) } in
   if Random.float 1. < 0.1 then
     Rel_path (Item link)
   else
@@ -108,9 +104,7 @@ let normalization_is_idempotent _ =
     assert_bool msg (p_norm = p_norm_norm)
   in
   for _ = 1 to 1000 do
-    match random_dir_path () with
-    | Abs_path dir -> check dir
-    | Rel_path dir -> check dir
+    map_any_kind (random_dir_path ()) { map = check }
   done
 
 let resolution_for_eventually_abs_paths _ =
@@ -169,15 +163,9 @@ let resolution_eliminates_links _ =
     in
     assert_bool msg (not (has_link p_res))
   in
-  let check p =
-    match resolve_any p with
-    | Abs_path p_res -> check_aux p p_res
-    | Rel_path p_res -> check_aux p p_res
-  in
+  let check p = map_any_kind (resolve_any p) { map = fun p_res -> check_aux p p_res } in
   for _ = 1 to 1000 do
-    match random_dir_path () with
-    | Abs_path dir -> check dir
-    | Rel_path dir -> check dir
+    map_any_kind (random_dir_path ()) { map = check }
   done
 
 

@@ -88,6 +88,14 @@ let rec has_link
     | Cons (_, p) -> has_link p
     | _ -> false
 
+
+type ('o, 'a) mapper = { map : 'k. ('k, 'o) t -> 'a }
+
+let map_any_kind x mapper =
+  match x with
+  | Abs_path p -> mapper.map p
+  | Rel_path p -> mapper.map p
+
 (******************************************************************************)
 (* Operators                                                                  *)
 (******************************************************************************)

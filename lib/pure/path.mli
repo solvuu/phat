@@ -122,6 +122,10 @@ val is_normalized : (_, _) t -> bool
 
 val has_link : (_, _) t -> bool
 
+type ('o, 'a) mapper = { map : 'k. ('k, 'o) t -> 'a }
+
+val map_any_kind : 'o of_some_kind -> ('o,'a) mapper -> 'a
+
 (** {2 Operators} *)
 
 val normalize : ('absrel, 'kind) t -> ('absrel, 'kind) t
