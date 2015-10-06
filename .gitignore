@@ -3,4 +3,7 @@
 /.omakedb
 /.omakedb.lock
 /OMakeroot.omc
+/etc/Solvuu.omc
 /tmp/
+/.merlin
+*~
