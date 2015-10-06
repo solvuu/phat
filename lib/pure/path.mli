@@ -112,6 +112,7 @@ val rel_file_path : string -> (rel, file) t Or_error.t
 
 val to_list : (_, _) t -> string list
 val to_string : (_, _) t -> string
+val sexp_of_t : (_, _) t -> Sexp.t
 
 val string_of_item : (_, _) item -> string
 

@@ -345,3 +345,22 @@ let to_string t =
   to_list t |> function
   | "/"::path -> "/" ^ (String.concat ~sep:"/" path)
   | path -> String.concat ~sep:"/" path
+
+let rec sexp_of_item
+  : type k o. (k, o) item -> Sexp.t
+  = function
+    | Root -> Sexp.Atom "Root"
+    | Dot -> Sexp.Atom "Dot"
+    | Dotdot -> Sexp.Atom "Dotdot"
+    | Dir d -> Sexp.List [ Sexp.Atom "Dir" ; sexp_of_name d ]
+    | File f -> Sexp.List [ Sexp.Atom "File" ; sexp_of_name f ]
+    | Link (l, p) -> Sexp.List [ Sexp.Atom "Link" ; sexp_of_name l ; sexp_of_t p ]
+
+and sexp_of_t
+  : type k o. (k, o) t -> Sexp.t
+  = function
+    | Item i -> Sexp.List [ Sexp.Atom "Item" ; sexp_of_item i ]
+    | Cons (dir, p) ->
+      Sexp.List [ Sexp.Atom "Cons" ; sexp_of_item dir ; sexp_of_t p ]
+
+let string_of_item x = (Elem.item_to_elem x :> string)
