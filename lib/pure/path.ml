@@ -128,13 +128,20 @@ let rec parent : type a b . (a,b) t -> (a,dir) t =
 let rec normalize : type a b . (a,b) t -> (a,b) t =
   fun path -> match path with
     | Item _ -> path
-    | Cons (dir, path) ->
-      let path = normalize path in
-      match dir, path with
+    | Cons (dir, path_tail) ->
+      let path_tail_norm = normalize path_tail in
+      match dir, path_tail_norm with
       | _, Item Dot -> Item dir
-      | Dot, _ -> path
+      | Dot, _ -> path_tail_norm
+      | Root, Item Dotdot -> Item Root
       | Root, Cons (Dotdot, path') -> normalize (Cons (Root, path'))
-      | _, _ -> Cons (dir, path)
+      | Dotdot, Item Dotdot -> Cons (Dotdot, path_tail_norm)
+      | Dotdot, Cons (Dotdot, _) -> Cons (Dotdot, path_tail_norm)
+      | Dir _, Item Dotdot -> Item Dot
+      | Dir _, Cons (Dotdot, path') -> path'
+      | Link _, Item Dotdot -> Item Dot
+      | Link _, Cons (Dotdot, path') -> path'
+      | _, _ -> Cons (dir, path_tail_norm)
 
 
 let rec equal
