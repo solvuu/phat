@@ -42,6 +42,8 @@ and random_rel_dir_path ?no_link () =
   else
     Item d
 
+(* [random_path_resolving_to p] generates a path that resolves to what
+   [p] resolves (the name is a tiny bit misleading) *)
 and random_path_resolving_to p () =
   let link = match p with
     | Abs_path p -> Link (random_name (), p)
