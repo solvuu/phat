@@ -58,8 +58,26 @@ let name_constructor _ =
       | Error _ -> ()
     )
 
+let normalization _ =
+  let check p =
+    let p_norm = normalize p in
+    let msg =
+      sprintf
+        "Path %s was normalized into %s which is not normalized"
+        (Path.to_string p)
+        (Path.to_string p_norm)
+    in
+    assert_bool msg (is_normalized p_norm)
+  in
+  for _ = 1 to 1000 do
+    match random_dir_path () with
+    | Abs_path dir -> check dir
+    | Rel_path dir -> check dir
+  done
+
 let suite = "Phat test suite" >::: [
-    "Name constructor" >:: name_constructor
+    "Name constructor" >:: name_constructor ;
+    "Normalization" >:: normalization ;
   ]
 
 
