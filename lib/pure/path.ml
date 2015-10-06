@@ -78,6 +78,14 @@ and is_normalized_no_dot_or_dotdot
     | Item _ -> true
     | Cons (_, p') -> is_normalized_no_dot_or_dotdot p'
 
+let rec has_link
+  : type k o. (k, o) t -> bool
+  = function
+    | Item (Link _) -> true
+    | Cons (Link _, _) -> true
+    | Cons (_, p) -> has_link p
+    | _ -> false
+
 (******************************************************************************)
 (* Operators                                                                  *)
 (******************************************************************************)
@@ -337,5 +345,3 @@ let to_string t =
   to_list t |> function
   | "/"::path -> "/" ^ (String.concat ~sep:"/" path)
   | path -> String.concat ~sep:"/" path
-
-let string_of_item x = (Elem.item_to_elem x :> string)

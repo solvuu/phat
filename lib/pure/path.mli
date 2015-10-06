@@ -119,6 +119,8 @@ val string_of_item : (_, _) item -> string
 
 val is_normalized : (_, _) t -> bool
 
+val has_link : (_, _) t -> bool
+
 (** {2 Operators} *)
 
 val normalize : ('absrel, 'kind) t -> ('absrel, 'kind) t
