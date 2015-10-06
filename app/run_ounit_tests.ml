@@ -75,9 +75,29 @@ let normalization _ =
     | Rel_path dir -> check dir
   done
 
+let normalization_is_idempotent _ =
+  let check p =
+    let p_norm = normalize p in
+    let p_norm_norm = normalize p_norm in
+    let msg =
+      sprintf
+        "Path %s was normalized into %s which was normalized into %s"
+        (Path.to_string p)
+        (Path.to_string p_norm)
+        (Path.to_string p_norm_norm)
+    in
+    assert_bool msg (p_norm = p_norm_norm)
+  in
+  for _ = 1 to 1000 do
+    match random_dir_path () with
+    | Abs_path dir -> check dir
+    | Rel_path dir -> check dir
+  done
+
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
     "Normalization" >:: normalization ;
+    "Normalization is idempotent" >:: normalization_is_idempotent ;
   ]
 
 
