@@ -50,6 +50,35 @@ let name s =
 
 
 (******************************************************************************)
+(* Visitors                                                                   *)
+(******************************************************************************)
+
+let rec is_normalized
+  : type k o. (k, o) t -> bool
+  = function
+    | Item _ -> true
+    | p -> is_normalized_no_dot p
+
+and is_normalized_no_dot
+  : type k o. (k, o) t -> bool
+  = function
+    | Item Dot -> false
+    | Cons (Dot, _) -> false
+    | Item _ -> true
+    | Cons (Dotdot, p') -> is_normalized_no_dot p'
+    | Cons (_, p') -> is_normalized_no_dot_or_dotdot p'
+
+and is_normalized_no_dot_or_dotdot
+  : type k o. (k, o) t -> bool
+  = function
+    | Item Dot -> false
+    | Item Dotdot -> false
+    | Cons (Dot, _) -> false
+    | Cons (Dotdot, _) -> false
+    | Item _ -> true
+    | Cons (_, p') -> is_normalized_no_dot_or_dotdot p'
+
+(******************************************************************************)
 (* Operators                                                                  *)
 (******************************************************************************)
 
