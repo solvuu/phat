@@ -11,11 +11,11 @@ open Result.Monad_infix
 (******************************************************************************)
 type name = string with sexp
 
-type abs = [`abs]
-type rel = [`rel]
+type abs = [`abs] with sexp
+type rel = [`rel] with sexp
 
-type dir = [`dir]
-type file = [`file]
+type dir = [`dir] with sexp
+type file = [`file] with sexp
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item
@@ -28,6 +28,8 @@ type ('kind,'obj) item =
 and ('kind,'obj) t =
   | Item : ('kind,'obj) item -> ('kind,'obj) t
   | Cons : ('a,dir) item * (rel,'obj) t -> ('a,'obj) t
+
+with sexp_of
 
 type 'a of_some_kind =
   | Abs_path of (abs,'a) t
@@ -346,21 +348,9 @@ let to_string t =
   | "/"::path -> "/" ^ (String.concat ~sep:"/" path)
   | path -> String.concat ~sep:"/" path
 
-let rec sexp_of_item
-  : type k o. (k, o) item -> Sexp.t
-  = function
-    | Root -> Sexp.Atom "Root"
-    | Dot -> Sexp.Atom "Dot"
-    | Dotdot -> Sexp.Atom "Dotdot"
-    | Dir d -> Sexp.List [ Sexp.Atom "Dir" ; sexp_of_name d ]
-    | File f -> Sexp.List [ Sexp.Atom "File" ; sexp_of_name f ]
-    | Link (l, p) -> Sexp.List [ Sexp.Atom "Link" ; sexp_of_name l ; sexp_of_t p ]
-
-and sexp_of_t
-  : type k o. (k, o) t -> Sexp.t
-  = function
-    | Item i -> Sexp.List [ Sexp.Atom "Item" ; sexp_of_item i ]
-    | Cons (dir, p) ->
-      Sexp.List [ Sexp.Atom "Cons" ; sexp_of_item dir ; sexp_of_t p ]
+(* since 'k and 'o are phantom types in ('k, 'o) t, we don't need
+   conversion functions for them, but sexp is not smart enough to see
+   that. *)
+let sexp_of_t p = sexp_of_t (fun _ -> assert false) (fun _ -> assert false) p
 
 let string_of_item x = (Elem.item_to_elem x :> string)
