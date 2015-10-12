@@ -50,6 +50,7 @@ let name s =
   else
     Ok s
 
+let name_exn s = name s |> ok_exn
 
 (******************************************************************************)
 (* Visitors                                                                   *)
@@ -95,6 +96,22 @@ let map_any_kind x mapper =
   match x with
   | Abs_path p -> mapper.map p
   | Rel_path p -> mapper.map p
+
+let kind
+  : type k o. (k, o) t -> o of_some_kind
+  = fun p ->
+    match p with
+    | Item Root -> Abs_path p
+    | Item (File _) -> Rel_path p
+    | Item (Dir _) -> Rel_path p
+    | Item Dot -> Rel_path p
+    | Item Dotdot -> Rel_path p
+    | Item (Link _) -> Rel_path p
+    | Cons (Root, _) -> Abs_path p
+    | Cons (Dir _, _) -> Rel_path p
+    | Cons (Dotdot, _) -> Rel_path p
+    | Cons (Dot, _) -> Rel_path p
+    | Cons (Link _, _) -> Rel_path p
 
 (******************************************************************************)
 (* Operators                                                                  *)

@@ -94,6 +94,7 @@ val root : (abs, dir) t
 
 (** Parse a name. *)
 val name : string -> name Or_error.t
+val name_exn : string -> name
 
 (** Parse an absolute directory path. *)
 val dir_path : string -> (abs, dir) t Or_error.t
@@ -125,6 +126,8 @@ val has_link : (_, _) t -> bool
 type ('o, 'a) mapper = { map : 'k. ('k, 'o) t -> 'a }
 
 val map_any_kind : 'o of_some_kind -> ('o,'a) mapper -> 'a
+
+val kind : (_, 'o) t -> 'o of_some_kind
 
 (** {2 Operators} *)
 
