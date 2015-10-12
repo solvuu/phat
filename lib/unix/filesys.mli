@@ -5,4 +5,6 @@ open Path
 
 val exists : (abs, _) Path.t -> [ `Yes | `Unknown | `No ]
 
-val stat : (abs, _) Path.t -> Unix.stats Or_error.t
+val lstat : (abs, _) Path.t -> Unix.stats Or_error.t
+
+val mkdir : (abs, dir) Path.t -> unit Or_error.t

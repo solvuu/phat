@@ -3,57 +3,60 @@ open OUnit2
 open Phat_unix.Std
 open Path
 
-let random_char () =
-  let a = Char.to_int 'a' in
-  let z = Char.to_int 'z' in
-  Char.of_int_exn (Random.int (z - a) + a)
+let new_name =
+  let k = ref (- 1) in
+  fun () ->
+    incr k ;
+    "foo" ^ (string_of_int !k)
+    |> name
+    |> ok_exn
 
-let random_name () =
-  String.init (Random.int 4 + 1) ~f:(fun _ -> random_char ())
-  |> name
-  |> ok_exn
-
-let rec random_rel_dir_item ?(no_link = false) () =
-  match Random.bool (), Random.bool () with
+let rec random_rel_dir_item ?(no_link = false) ?root ?level () =
+  let bottom = match level with
+    | Some l -> l <= 0
+    | None -> false
+  in
+  match Random.bool () || bottom, Random.float 1. > 0.2 with
   | true, b ->
     if no_link || b then
-      Dir (random_name ())
+      Dir (new_name ())
     else (
-      map_any_kind (random_dir_path ()) { map = fun p ->
-          Link (random_name (), p)
+      map_any_kind (random_dir_path ~no_link ?root ?level ()) { map = fun p ->
+          Link (new_name (), p)
         }
     )
   | false, true -> Dot
   | false, false -> Dotdot
 
-and random_dir_path ?no_link () =
+and random_dir_path ?no_link ?root ?level () =
   match Random.bool () with
-  | true -> Abs_path (random_abs_dir_path ?no_link ())
-  | false -> Rel_path (random_rel_dir_path ?no_link ())
+  | true -> Abs_path (random_abs_dir_path ?no_link ?root ?level ())
+  | false -> Rel_path (random_rel_dir_path ?no_link ?root ?level ())
 
-and random_abs_dir_path ?no_link () =
-  concat root (random_rel_dir_path ?no_link ())
+and random_abs_dir_path ?no_link ?(root = root) ?level () =
+  concat root (random_rel_dir_path ?no_link ~root ?level ())
 
-and random_rel_dir_path ?no_link () =
-  let d = random_rel_dir_item ?no_link () in
+and random_rel_dir_path ?no_link ?root ?level () =
+  let d = random_rel_dir_item ?no_link ?root ?level () in
   if Random.bool () then
-    Cons (d, random_rel_dir_path ?no_link ())
+    let level = Option.map level ~f:(fun i -> i - 1) in
+    Cons (d, random_rel_dir_path ?no_link ?root ?level ())
   else
     Item d
 
 (* [random_path_resolving_to p] generates a path that resolves to what
    [p] resolves (the name is a tiny bit misleading) *)
-and random_path_resolving_to p () =
-  let link = map_any_kind p { map = fun p -> Link (random_name (), p) } in
+and random_path_resolving_to ?root ?level p () =
+  let link = map_any_kind p { map = fun p -> Link (new_name (), p) } in
   if Random.float 1. < 0.1 then
     Rel_path (Item link)
   else
-    match random_dir_path () with
+    match random_dir_path ?root ?level () with
     | Abs_path dir -> Abs_path (concat dir (Item link))
     | Rel_path dir -> Rel_path (concat dir (Item link))
 
-and random_path_with_link () =
-  random_path_resolving_to (random_dir_path ())
+and random_path_with_link ?root ?level () =
+  random_path_resolving_to (random_dir_path ?root ?level ())
 
 let not_names = [
   "foo/" ;
@@ -112,9 +115,9 @@ let resolution_for_eventually_abs_paths _ =
     let msg =
       sprintf
         "Path %s was resolved into %s instead of %s"
-        (Sexp.to_string (Path.sexp_of_t p))
-        (Sexp.to_string (Path.sexp_of_t p_res))
-        (Sexp.to_string (Path.sexp_of_t p_ref))
+        (Sexp.to_string_hum (Path.sexp_of_t p))
+        (Sexp.to_string_hum (Path.sexp_of_t p_res))
+        (Sexp.to_string_hum (Path.sexp_of_t p_ref))
     in
     assert_failure msg
   in
@@ -136,8 +139,8 @@ let resolution_is_identity_for_paths_without_links _ =
     let msg =
       sprintf
         "Path %s was resolved into %s"
-        (Sexp.to_string (Path.sexp_of_t dir))
-        (Sexp.to_string (Path.sexp_of_t dir'))
+        (Sexp.to_string_hum (Path.sexp_of_t dir))
+        (Sexp.to_string_hum (Path.sexp_of_t dir'))
     in
     assert_failure msg
   in
@@ -158,8 +161,8 @@ let resolution_eliminates_links _ =
     let msg =
       sprintf
         "Path %s was resolved into %s"
-        (Sexp.to_string (Path.sexp_of_t p))
-        (Sexp.to_string (Path.sexp_of_t p_res))
+        (Sexp.to_string_hum (Path.sexp_of_t p))
+        (Sexp.to_string_hum (Path.sexp_of_t p_res))
     in
     assert_bool msg (not (has_link p_res))
   in
@@ -168,6 +171,65 @@ let resolution_eliminates_links _ =
     map_any_kind (random_dir_path ()) { map = check }
   done
 
+let create_test_directory path =
+  let f x = Filename.concat path x in
+  Unix.mkdir (f "foo") ;
+  Unix.mkdir (f "foo/bar") ;
+  Out_channel.write_all (f "foo/bar/baz") ~data:"baz" ;
+  Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux")
+
+let filesys_exists ctx =
+  let open Path in
+  let tmpdir = OUnit2.bracket_tmpdir ctx in
+  let tmpdir_path = ok_exn (dir_path tmpdir) in
+  let check p =
+    if not (Filesys.exists (concat tmpdir_path p) = `Yes) then (
+      let msg =
+        sprintf
+          "Failed to detect path %s"
+          (Sexp.to_string_hum (Path.sexp_of_t p))
+      in
+      assert_failure msg
+    )
+  in
+  let foo = Item (Dir (name_exn "foo")) in
+  let foo_bar = concat foo (Item (Dir (name_exn "bar"))) in
+  let foo_bar_baz = concat foo_bar (Item (File (name_exn "baz"))) in
+  let qux = Item (Link (name_exn "qux", foo_bar_baz)) in
+  create_test_directory tmpdir ;
+  check foo ;
+  check foo_bar ;
+  check foo_bar_baz ;
+  check qux
+
+
+let filesys_mkdir ctx =
+  let tmpdir = OUnit2.bracket_tmpdir ctx ^ "_delme" in
+  let tmpdir_path = ok_exn (Path.dir_path tmpdir) in
+  for _ = 1 to 1000 do
+    let p = concat tmpdir_path (random_rel_dir_path ~root:tmpdir_path ~level:0 ()) in
+    (
+      match Filesys.mkdir p with
+      | Ok () ->
+        if Filesys.exists p <> `Yes then (
+          let msg =
+            sprintf
+              "Filesys.mkdir failed to create path %s"
+              (Sexp.to_string_hum (Path.sexp_of_t p))
+          in
+          assert_failure msg
+        )
+      | Error e ->
+        let msg =
+          sprintf
+            "Filesys.mkdir failed to create path %s: %s"
+            (Sexp.to_string_hum (Path.sexp_of_t p))
+            (Sexp.to_string_hum (Error.sexp_of_t e))
+        in
+        assert_failure msg
+    ) ;
+    Sys.command_exn (sprintf "tree %s >> delme ; rm -rf %s ; mkdir -p %s" tmpdir tmpdir tmpdir)
+  done
 
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
@@ -176,6 +238,8 @@ let suite = "Phat test suite" >::: [
     "Resolution eliminates links" >:: resolution_eliminates_links ;
     "Resolution is the identity for paths without links" >:: resolution_is_identity_for_paths_without_links ;
     "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ;
+    "Exists test" >:: filesys_exists ;
+    "Create dir paths" >:: filesys_mkdir ;
   ]
 
 

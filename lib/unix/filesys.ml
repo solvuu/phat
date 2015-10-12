@@ -14,26 +14,10 @@ let and_check f x e =
 
 let is_link p =
   let p_is_a_link () =
-    Unix.(if (stat p).st_kind = S_LNK then `Yes else `No)
+    Unix.(if (lstat p).st_kind = S_LNK then `Yes else `No)
   in
   file_exists p
   |> and_check p_is_a_link ()
-
-let some_kind_of_path
-  : type k o. (k, o) Path.t -> o Path.of_some_kind
-  = fun path ->
-    match path with
-    | Item Root -> Abs_path path
-    | Item Dot -> Rel_path path
-    | Item Dotdot -> Rel_path path
-    | Item (File _) -> Rel_path path
-    | Item (Dir _) -> Rel_path path
-    | Item (Link _) -> Rel_path path
-    | Cons (Root, _) -> Abs_path path
-    | Cons (Dot, _) -> Rel_path path
-    | Cons (Dotdot, _) -> Rel_path path
-    | Cons (Dir _, _) -> Rel_path path
-    | Cons (Link _, _) -> Rel_path path
 
 let rec exists
   : type o. (abs, o) Path.t -> [ `Yes | `Unknown | `No ]
@@ -59,7 +43,7 @@ and exists_item
         |> and_check is_directory p_abs'
       | Link (l, target) ->
         let target_exists () =
-          match some_kind_of_path target with
+          match kind target with
           | Abs_path p -> exists p
           | Rel_path p -> exists_rel_path p_abs p
         in
@@ -87,7 +71,61 @@ let sexp_of_unix_error =
     sexp_of_string
     sexp_of_string
 
-let stat p =
-  try Ok (Unix.stat (to_string p))
+let lstat p =
+  try Ok (Unix.lstat (to_string p))
   with Unix.Unix_error (e, fn, msg) ->
-    error "Phat.stat" (e, fn, msg) sexp_of_unix_error
+    error "Phat_unix.Filesys.lstat" (e, fn, msg) sexp_of_unix_error
+
+
+let wrap_unix fn f =
+  try Ok (f ())
+  with
+  | Unix.Unix_error (e, fn, msg) ->
+    error fn (e, fn, msg) sexp_of_unix_error
+
+let unix_mkdir p =
+  wrap_unix "Phat_unix.Filesys.mkdir" (fun () -> Unix.mkdir (to_string p))
+
+let unix_symlink link_path ~targets:link_target =
+  wrap_unix "Phat_unix.Filesys.mkdir" (fun () ->
+      Unix.symlink ~dst:(to_string link_path) ~src:(to_string link_target)
+    )
+
+let rec mkdir
+  : (abs, dir) Path.t -> unit Or_error.t
+  = function
+    | Item Root -> Ok ()
+    | Cons (Root, rel_p) ->
+      mkdir_aux root rel_p
+
+and mkdir_aux
+  : (abs, dir) Path.t -> (rel, dir) Path.t -> unit Or_error.t
+  = fun p_abs p_rel ->
+    let open Or_error.Monad_infix in
+    match p_rel with
+    | Item (Dir n) ->
+      let p = concat p_abs p_rel in
+      if exists p = `Yes then Ok () else unix_mkdir p
+    | Item Dot -> Ok ()
+    | Item Dotdot -> Ok ()
+    | Item (Link (n, dir)) -> (
+        unix_symlink (concat p_abs p_rel) ~targets:dir >>= fun () ->
+        match kind dir with
+        | Rel_path dir -> mkdir_aux p_abs dir
+        | Abs_path dir -> mkdir dir
+      )
+    | Cons (Dir n, p_rel') ->
+      let p_abs' = concat p_abs (Item (Dir n)) in
+      (if exists p_abs' = `Yes then Ok () else unix_mkdir p_abs') >>= fun () ->
+      mkdir_aux p_abs' p_rel'
+    | Cons (Link (n, dir) as l, p_rel') -> (
+      unix_symlink (concat p_abs (Item l)) dir >>= fun () ->
+      match kind dir with
+      | Rel_path dir ->
+        mkdir_aux p_abs (concat dir p_rel')
+      | Abs_path dir ->
+        mkdir (concat dir p_rel')
+      )
+    | Cons (Dot, p_rel') -> mkdir_aux p_abs p_rel'
+    | Cons (Dotdot, p_rel') ->
+      mkdir_aux (parent p_abs) p_rel'
