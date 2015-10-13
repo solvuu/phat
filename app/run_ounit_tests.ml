@@ -204,7 +204,7 @@ let filesys_exists ctx =
 
 
 let filesys_mkdir ctx =
-  let tmpdir = OUnit2.bracket_tmpdir ctx ^ "_delme" in
+  let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Path.dir_path tmpdir) in
   for _ = 1 to 1000 do
     let p = concat tmpdir_path (random_rel_dir_path ~root:tmpdir_path ~level:0 ()) in
@@ -228,8 +228,25 @@ let filesys_mkdir ctx =
         in
         assert_failure msg
     ) ;
-    Sys.command_exn (sprintf "tree %s >> delme ; rm -rf %s ; mkdir -p %s" tmpdir tmpdir tmpdir)
+    Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
   done
+
+let filesys_mkdir_cycles ctx =
+  let open Path in
+  let tmpdir = OUnit2.bracket_tmpdir ctx in
+  let tmpdir_path = ok_exn (Path.dir_path tmpdir) in
+  let rec foo_bar = Item (Link (name_exn "bar", baz_qux))
+  and baz_qux = Item (Link (name_exn "qux", foo_bar))
+  in
+  match Filesys.mkdir (concat tmpdir_path foo_bar) with
+  | Ok () -> () (* FIXME: check that the paths were created correctly! *)
+  | Error e ->
+    let msg =
+      sprintf
+        "Filesys.mkdir failed to create cyclic path: %s"
+        (Sexp.to_string_hum (Error.sexp_of_t e))
+    in
+    assert_failure msg
 
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
@@ -240,6 +257,7 @@ let suite = "Phat test suite" >::: [
     "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ;
     "Exists test" >:: filesys_exists ;
     "Create dir paths" >:: filesys_mkdir ;
+    "Create dirs with cycles" >:: filesys_mkdir_cycles ;
   ]
 
 
