@@ -9,10 +9,10 @@ PACKAGES(x) =
   switch $(x)
   case pure
     return core_kernel sexplib.syntax
-  case unix
-    return $(PACKAGES pure) core
+  case async-unix
+    return $(PACKAGES pure) async
   case run_ounit_tests
-    return $(PACKAGES unix) oUnit
+    return $(PACKAGES async-unix) oUnit
   default
     eprintln(PACKAGES undefined for $(x).)
     exit(1)
@@ -21,10 +21,10 @@ LIB_DEPS(x) =
   switch $(x)
   case pure
     return $(EMPTY)
-  case unix
+  case async-unix
     return pure
   case run_ounit_tests
-    return pure unix
+    return pure async-unix
   default
     eprintln(LIB_DEPS undefined for $(x).)
     exit(1)

@@ -1,21 +1,27 @@
 open Core.Std
-open Phat_pure
+open Async.Std
+open Phat_pure.Std
 open Path
-open Or_error.Monad_infix
 
-let file_exists = Sys.file_exists ~follow_symlinks:false
+(** Async's [file_exists] has a
+    {{:https://github.com/janestreet/async_unix/issues/6}bug} that
+    doesn't allow setting follow_symlinks to false. *)
+let file_exists x =
+  In_thread.run (fun () -> Core.Std.Sys.file_exists ~follow_symlinks:false x)
+
 let is_file = Sys.is_file ~follow_symlinks:false
 let is_directory = Sys.is_directory ~follow_symlinks:false
 
 let and_check f x e =
-  match e with
+  e >>= function
   | `Yes -> f x
-  | `No -> `No
-  | `Unknown -> `Unknown
+  | `No -> return `No
+  | `Unknown -> return `Unknown
 
 let is_link p =
   let p_is_a_link () =
-    Unix.(if (lstat p).st_kind = S_LNK then `Yes else `No)
+    Unix.lstat p >>| fun {Unix.Stats.kind; _} ->
+    if kind = `Link then `Yes else `No
   in
   file_exists p
   |> and_check p_is_a_link ()
@@ -23,19 +29,19 @@ let is_link p =
 (* FIXME: exists is not immune to cyclic paths, use same procedure than
    mkdir *)
 let rec exists
-  : type o. (abs, o) Path.t -> [ `Yes | `Unknown | `No ]
+  : type o. (abs, o) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
   =
   function
-  | Item Root -> `Yes
+  | Item Root -> return `Yes
   | Cons (Root, p_rel) -> exists_rel_path "/" p_rel
 
 and exists_item
-    : type o. string -> (rel, o) item -> [ `Yes | `Unknown | `No ]
+    : type o. string -> (rel, o) item -> [ `Yes | `Unknown | `No ] Deferred.t
     =
     fun p_abs p_rel ->
       match p_rel with
-      | Dot -> `Yes
-      | Dotdot -> `Yes
+      | Dot -> return `Yes
+      | Dotdot -> return `Yes
       | File f ->
         let p_abs' = Filename.concat p_abs (f :> string) in
         file_exists p_abs'
@@ -56,7 +62,7 @@ and exists_item
         |> and_check target_exists ()
 
 and exists_rel_path
-    : type o. string -> (rel, o) Path.t -> [ `Yes | `Unknown | `No ]
+    : type o. string -> (rel, o) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
     =
     fun p_abs p_rel ->
       match p_rel with
@@ -74,17 +80,15 @@ let sexp_of_unix_error =
     sexp_of_string
     sexp_of_string
 
-let lstat p =
-  try Ok (Unix.lstat (to_string p))
-  with Unix.Unix_error (e, fn, msg) ->
-    error "Phat_unix.Filesys.lstat" (e, fn, msg) sexp_of_unix_error
-
+let lstat p : Unix.Stats.t Or_error.t Deferred.t =
+  try_with (fun () -> Unix.lstat (to_string p)) >>|
+  Or_error.of_exn_result >>| fun x ->
+  Or_error.tag x "Phat_unix.Filesys.lstat"
 
 let wrap_unix title f =
-  try Ok (f ())
-  with
-  | Unix.Unix_error (e, fn, msg) ->
-    error title (e, fn, msg) sexp_of_unix_error
+  try_with f >>|
+  Or_error.of_exn_result >>| fun x ->
+  Or_error.tag x title
 
 let unix_mkdir p =
   wrap_unix "Phat_unix.Filesys.mkdir" (fun () -> Unix.mkdir (to_string p))
@@ -117,39 +121,47 @@ end
 
 
 let rec mkdir_main
-  : Path_set.t -> (abs, dir) Path.t -> Path_set.t Or_error.t
+  : Path_set.t -> (abs, dir) Path.t -> Path_set.t Or_error.t Deferred.t
   = fun seen p ->
     match p with
-    | Item Root -> Ok seen
+    | Item Root -> return (Ok seen)
     | Cons (Root, rel_p) ->
       mkdir_aux seen root rel_p
 
 and mkdir_aux
-  : Path_set.t -> (abs, dir) Path.t -> (rel, dir) Path.t -> Path_set.t Or_error.t
+  : Path_set.t -> (abs, dir) Path.t -> (rel, dir) Path.t -> Path_set.t Or_error.t Deferred.t
   = fun seen p_abs p_rel ->
-    if Path_set.mem seen p_abs p_rel then Ok seen
+    if Path_set.mem seen p_abs p_rel then return (Ok seen)
     else
       let seen' = Path_set.add seen p_abs p_rel in
       match p_rel with
-      | Item (Dir _) ->
-        let p = concat p_abs p_rel in
-        (if exists p = `Yes then Ok () else unix_mkdir p) >>= fun () ->
-        Ok seen'
-      | Item Dot -> Ok seen'
-      | Item Dotdot -> Ok seen'
+      | Item (Dir _) -> (
+          let p = concat p_abs p_rel in
+          exists p >>= (fun x -> match x with
+            | `Yes -> return (Ok ())
+            | `No | `Unknown -> unix_mkdir p
+          ) >>|? fun () ->
+          seen'
+        )
+      | Item Dot -> return (Ok seen')
+      | Item Dotdot -> return (Ok seen')
       | Item (Link (_, dir)) -> (
           let p = concat p_abs p_rel in
-          unix_symlink p ~targets:dir >>= fun () ->
+          unix_symlink p ~targets:dir >>=? fun () ->
           match kind dir with
           | Rel_path dir -> mkdir_aux seen' p_abs dir
           | Abs_path dir -> mkdir_main seen' dir
         )
-    | Cons (Dir n, p_rel') ->
-      let p_abs' = concat p_abs (Item (Dir n)) in
-      (if exists p_abs' = `Yes then Ok () else unix_mkdir p_abs') >>= fun () ->
-      mkdir_aux seen' p_abs' p_rel'
+    | Cons (Dir n, p_rel') -> (
+        let p_abs' = concat p_abs (Item (Dir n)) in
+        exists p_abs' >>= (fun x -> match x with
+            | `Yes -> return (Ok ())
+            | `No | `Unknown -> unix_mkdir p_abs'
+        ) >>=? fun () ->
+        mkdir_aux seen' p_abs' p_rel'
+      )
     | Cons (Link (_, dir) as l, p_rel') -> (
-      unix_symlink (concat p_abs (Item l)) ~targets:dir >>= fun () ->
+      unix_symlink (concat p_abs (Item l)) ~targets:dir >>=? fun () ->
       match kind dir with
       | Rel_path dir ->
         mkdir_aux seen' p_abs (concat dir p_rel')
@@ -161,5 +173,5 @@ and mkdir_aux
       mkdir_aux seen' (parent p_abs) p_rel'
 
 and mkdir p =
-  mkdir_main Path_set.empty p >>= fun _ ->
+  mkdir_main Path_set.empty p >>| fun _ ->
   Ok ()
