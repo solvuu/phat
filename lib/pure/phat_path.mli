@@ -57,13 +57,13 @@ open Core_kernel.Std
 
 (** User chosen file or directory name. By "user chosen" we mean to
     exclude reserved names such as ".", "", "..", and "/". *)
-type name = private string
+type name = private string [@@deriving sexp]
 
-type abs = [`abs] (** absolute path, phantom type *)
-type rel = [`rel] (** relative path, phantom type *)
+type abs = [`abs] [@@deriving sexp] (** absolute path, phantom type *)
+type rel = [`rel] [@@deriving sexp] (** relative path, phantom type *)
 
-type file = [`file] (** regular file, phantom type *)
-type dir  = [`dir]  (** directory, phantom type *)
+type file = [`file] [@@deriving sexp] (** regular file, phantom type *)
+type dir  = [`dir]  [@@deriving sexp] (** directory, phantom type *)
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item

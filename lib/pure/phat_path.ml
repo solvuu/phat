@@ -235,8 +235,8 @@ module Elem : sig
   val file_of_elems : elems -> (abs,file) t Or_error.t
 
 end = struct
-  type elem = string [@@deriving sexp]
-  type elems = elem list [@@deriving sexp]
+  type elem = string [@@deriving sexp_of]
+  type elems = elem list [@@deriving sexp_of]
 
   let elem s = match s with
     | "/" | "" | "." | ".." -> Ok s
