@@ -1,14 +1,21 @@
 open Core.Std
+open Async.Std
 open OUnit2
-open Phat_unix.Std
-open Path
+open Phat_async_unix.Std
+
+(** Like OUnit.(>::), but the test function returns a Deferred. *)
+let (>::=) test_name (f : test_ctxt -> unit Deferred.t) : test =
+  test_name >:: (
+    fun test_ctxt ->
+    Thread_safe.block_on_async_exn (fun () -> f test_ctxt)
+  )
 
 let new_name =
   let k = ref (- 1) in
   fun () ->
     incr k ;
     "foo" ^ (string_of_int !k)
-    |> name
+    |> Path.name
     |> ok_exn
 
 let rec random_rel_dir_item ?(no_link = false) ?root ?level () =
@@ -19,41 +26,41 @@ let rec random_rel_dir_item ?(no_link = false) ?root ?level () =
   match Random.bool () || bottom, Random.float 1. > 0.2 with
   | true, b ->
     if no_link || b then
-      Dir (new_name ())
+      Path.Dir (new_name ())
     else (
-      map_any_kind (random_dir_path ~no_link ?root ?level ()) { map = fun p ->
-          Link (new_name (), p)
+      Path.map_any_kind (random_dir_path ~no_link ?root ?level ()) { Path.map = fun p ->
+          Path.Link (new_name (), p)
         }
     )
-  | false, true -> Dot
-  | false, false -> Dotdot
+  | false, true -> Path.Dot
+  | false, false -> Path.Dotdot
 
 and random_dir_path ?no_link ?root ?level () =
   match Random.bool () with
-  | true -> Abs_path (random_abs_dir_path ?no_link ?root ?level ())
-  | false -> Rel_path (random_rel_dir_path ?no_link ?root ?level ())
+  | true -> Path.Abs_path (random_abs_dir_path ?no_link ?root ?level ())
+  | false -> Path.Rel_path (random_rel_dir_path ?no_link ?root ?level ())
 
-and random_abs_dir_path ?no_link ?(root = root) ?level () =
-  concat root (random_rel_dir_path ?no_link ~root ?level ())
+and random_abs_dir_path ?no_link ?(root = Path.root) ?level () =
+  Path.concat root (random_rel_dir_path ?no_link ~root ?level ())
 
 and random_rel_dir_path ?no_link ?root ?level () =
   let d = random_rel_dir_item ?no_link ?root ?level () in
   if Random.bool () then
     let level = Option.map level ~f:(fun i -> i - 1) in
-    Cons (d, random_rel_dir_path ?no_link ?root ?level ())
+    Path.Cons (d, random_rel_dir_path ?no_link ?root ?level ())
   else
-    Item d
+    Path.Item d
 
 (* [random_path_resolving_to p] generates a path that resolves to what
    [p] resolves (the name is a tiny bit misleading) *)
 and random_path_resolving_to ?root ?level p () =
-  let link = map_any_kind p { map = fun p -> Link (new_name (), p) } in
+  let link = Path.map_any_kind p { Path.map = fun p -> Path.Link (new_name (), p) } in
   if Random.float 1. < 0.1 then
-    Rel_path (Item link)
+    Path.Rel_path (Path.Item link)
   else
     match random_dir_path ?root ?level () with
-    | Abs_path dir -> Abs_path (concat dir (Item link))
-    | Rel_path dir -> Rel_path (concat dir (Item link))
+    | Path.Abs_path dir -> Path.(Abs_path (concat dir (Item link)))
+    | Path.Rel_path dir -> Path.(Rel_path (concat dir (Item link)))
 
 and random_path_with_link ?root ?level () =
   random_path_resolving_to (random_dir_path ?root ?level ())
@@ -78,25 +85,25 @@ let name_constructor _ =
 
 let normalization _ =
   let check p =
-    let p_norm = normalize p in
+    let p_norm = Path.normalize p in
     let msg =
       sprintf
         "Path %s was normalized into %s which is not normalized"
         (Path.to_string p)
         (Path.to_string p_norm)
     in
-    assert_bool msg (is_normalized p_norm)
+    assert_bool msg (Path.is_normalized p_norm)
   in
   for _ = 1 to 1000 do
     match random_dir_path () with
-    | Abs_path dir -> check dir
-    | Rel_path dir -> check dir
+    | Path.Abs_path dir -> check dir
+    | Path.Rel_path dir -> check dir
   done
 
 let normalization_is_idempotent _ =
   let check p =
-    let p_norm = normalize p in
-    let p_norm_norm = normalize p_norm in
+    let p_norm = Path.normalize p in
+    let p_norm_norm = Path.normalize p_norm in
     let msg =
       sprintf
         "Path %s was normalized into %s which was normalized into %s"
@@ -107,7 +114,7 @@ let normalization_is_idempotent _ =
     assert_bool msg (p_norm = p_norm_norm)
   in
   for _ = 1 to 1000 do
-    map_any_kind (random_dir_path ()) { map = check }
+    Path.map_any_kind (random_dir_path ()) { Path.map = check }
   done
 
 let resolution_for_eventually_abs_paths _ =
@@ -126,12 +133,12 @@ let resolution_for_eventually_abs_paths _ =
   in
   for _ = 1 to 1000 do
     let p_ref = random_abs_dir_path ~no_link:true () in
-    match random_path_resolving_to (Abs_path p_ref) () with
-    | Abs_path p -> check p_ref p (resolve p)
-    | Rel_path p ->
-      match resolve_any p with
-      | Abs_path p_res -> check p_ref p p_res
-      | Rel_path p_res -> failure p_ref p p_res
+    match random_path_resolving_to (Path.Abs_path p_ref) () with
+    | Path.Abs_path p -> check p_ref p (Path.resolve p)
+    | Path.Rel_path p ->
+      match Path.resolve_any p with
+      | Path.Abs_path p_res -> check p_ref p p_res
+      | Path.Rel_path p_res -> failure p_ref p p_res
   done
 
 let resolution_is_identity_for_paths_without_links _ =
@@ -149,11 +156,11 @@ let resolution_is_identity_for_paths_without_links _ =
   in
   for _ = 1 to 1000 do
     match random_dir_path ~no_link:true () with
-    | Abs_path dir -> check dir (resolve dir)
-    | Rel_path dir ->
-      match resolve_any dir with
-      | Abs_path dir' -> failure dir dir'
-      | Rel_path dir' -> check dir dir'
+    | Path.Abs_path dir -> check dir (Path.resolve dir)
+    | Path.Rel_path dir ->
+      match Path.resolve_any dir with
+      | Path.Abs_path dir' -> failure dir dir'
+      | Path.Rel_path dir' -> check dir dir'
   done
 
 let resolution_eliminates_links _ =
@@ -164,61 +171,66 @@ let resolution_eliminates_links _ =
         (Sexp.to_string_hum (Path.sexp_of_t p))
         (Sexp.to_string_hum (Path.sexp_of_t p_res))
     in
-    assert_bool msg (not (has_link p_res))
+    assert_bool msg (not (Path.has_link p_res))
   in
-  let check p = map_any_kind (resolve_any p) { map = fun p_res -> check_aux p p_res } in
+  let check p = Path.map_any_kind (Path.resolve_any p) { Path.map = fun p_res -> check_aux p p_res } in
   for _ = 1 to 1000 do
-    map_any_kind (random_dir_path ()) { map = check }
+    Path.map_any_kind (random_dir_path ()) { Path.map = check }
   done
 
 let create_test_directory path =
   let f x = Filename.concat path x in
-  Unix.mkdir (f "foo") ;
-  Unix.mkdir (f "foo/bar") ;
-  Out_channel.write_all (f "foo/bar/baz") ~data:"baz" ;
+  Unix.mkdir (f "foo") >>= fun () ->
+  Unix.mkdir (f "foo/bar") >>= fun () ->
+  Writer.save (f "foo/bar/baz") ~contents:"baz" >>= fun () ->
   Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux")
 
 let filesys_exists ctx =
-  let open Path in
   let tmpdir = OUnit2.bracket_tmpdir ctx in
-  let tmpdir_path = ok_exn (dir_path tmpdir) in
+  let tmpdir_path = ok_exn (Path.dir_path tmpdir) in
   let check p =
-    if not (Filesys.exists (concat tmpdir_path p) = `Yes) then (
-      let msg =
-        sprintf
-          "Failed to detect path %s"
-          (Sexp.to_string_hum (Path.sexp_of_t p))
-      in
-      assert_failure msg
-    )
+    Filesys.exists (Path.concat tmpdir_path p) >>| function
+    | `Yes -> ()
+    | `Unknown
+    | `No ->
+       let msg =
+         sprintf
+           "Failed to detect path %s"
+           (Sexp.to_string_hum (Path.sexp_of_t p))
+       in
+       assert_failure msg
   in
-  let foo = Item (Dir (name_exn "foo")) in
-  let foo_bar = concat foo (Item (Dir (name_exn "bar"))) in
-  let foo_bar_baz = concat foo_bar (Item (File (name_exn "baz"))) in
-  let qux = Item (Link (name_exn "qux", foo_bar_baz)) in
-  create_test_directory tmpdir ;
-  check foo ;
-  check foo_bar ;
-  check foo_bar_baz ;
+  let foo = Path.(Item (Dir (name_exn "foo"))) in
+  let foo_bar = Path.(concat foo (Item (Dir (name_exn "bar")))) in
+  let foo_bar_baz = Path.(concat foo_bar (Item (File (name_exn "baz")))) in
+  let qux = Path.(Item (Link (name_exn "qux", foo_bar_baz))) in
+  create_test_directory tmpdir >>= fun () ->
+  check foo >>= fun () ->
+  check foo_bar >>= fun () ->
+  check foo_bar_baz >>= fun () ->
   check qux
 
 
 let filesys_mkdir ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Path.dir_path tmpdir) in
-  for _ = 1 to 1000 do
-    let p = concat tmpdir_path (random_rel_dir_path ~root:tmpdir_path ~level:0 ()) in
+  List.init 1000 ~f:(fun _ -> ()) |>
+  Deferred.List.iter ~f:(fun () ->
+    let p = Path.concat tmpdir_path (random_rel_dir_path ~root:tmpdir_path ~level:0 ()) in
     (
-      match Filesys.mkdir p with
-      | Ok () ->
-        if Filesys.exists p <> `Yes then (
-          let msg =
-            sprintf
-              "Filesys.mkdir failed to create path %s"
-              (Sexp.to_string_hum (Path.sexp_of_t p))
-          in
-          assert_failure msg
-        )
+      Filesys.mkdir p >>= function
+      | Ok () -> (
+	Filesys.exists p >>| function
+	| `Yes -> ()
+	| `No
+	| `Unknown ->
+	   let msg =
+             sprintf
+               "Filesys.mkdir failed to create path %s"
+               (Sexp.to_string_hum (Path.sexp_of_t p))
+           in
+           assert_failure msg
+      )
       | Error e ->
         let msg =
           sprintf
@@ -226,19 +238,18 @@ let filesys_mkdir ctx =
             (Sexp.to_string_hum (Path.sexp_of_t p))
             (Sexp.to_string_hum (Error.sexp_of_t e))
         in
-        assert_failure msg
-    ) ;
+        return (ignore (assert_failure msg))
+    ) >>= fun () ->
     Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
-  done
+  )
 
 let filesys_mkdir_cycles ctx =
-  let open Path in
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Path.dir_path tmpdir) in
-  let rec foo_bar = Item (Link (name_exn "bar", baz_qux))
-  and baz_qux = Item (Link (name_exn "qux", foo_bar))
+  let rec foo_bar = Path.(Item (Link (name_exn "bar", baz_qux)))
+  and baz_qux = Path.(Item (Link (name_exn "qux", foo_bar)))
   in
-  match Filesys.mkdir (concat tmpdir_path foo_bar) with
+  Filesys.mkdir (Path.concat tmpdir_path foo_bar) >>| function
   | Ok () -> () (* FIXME: check that the paths were created correctly! *)
   | Error e ->
     let msg =
@@ -246,7 +257,7 @@ let filesys_mkdir_cycles ctx =
         "Filesys.mkdir failed to create cyclic path: %s"
         (Sexp.to_string_hum (Error.sexp_of_t e))
     in
-    assert_failure msg
+    ignore (assert_failure msg)
 
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
@@ -255,9 +266,9 @@ let suite = "Phat test suite" >::: [
     "Resolution eliminates links" >:: resolution_eliminates_links ;
     "Resolution is the identity for paths without links" >:: resolution_is_identity_for_paths_without_links ;
     "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ;
-    "Exists test" >:: filesys_exists ;
-    "Create dir paths" >:: filesys_mkdir ;
-    "Create dirs with cycles" >:: filesys_mkdir_cycles ;
+    "Exists test" >::= filesys_exists ;
+    "Create dir paths" >::= filesys_mkdir ;
+    "Create dirs with cycles" >::= filesys_mkdir_cycles ;
   ]
 
 
