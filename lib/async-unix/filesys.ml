@@ -12,19 +12,18 @@ let file_exists x =
 let is_file = Sys.is_file ~follow_symlinks:false
 let is_directory = Sys.is_directory ~follow_symlinks:false
 
-let and_check f x e =
-  e >>= function
-  | `Yes -> f x
-  | `No -> return `No
-  | `Unknown -> return `Unknown
-
 let is_link p =
-  let p_is_a_link () =
+  file_exists p >>= function
+  | `No
+  | `Unknown as x ->
+    return x
+  | `Yes ->
     Unix.lstat p >>| fun {Unix.Stats.kind; _} ->
-    if kind = `Link then `Yes else `No
-  in
-  file_exists p
-  |> and_check p_is_a_link ()
+    match kind with
+    | `Link ->
+      `Yes
+    | `File | `Directory | `Char | `Block | `Fifo | `Socket ->
+      `No
 
 (* FIXME: exists is not immune to cyclic paths, use same procedure than
    mkdir *)
@@ -42,24 +41,32 @@ and exists_item
       match p_rel with
       | Dot -> return `Yes
       | Dotdot -> return `Yes
-      | File f ->
-        let p_abs' = Filename.concat p_abs (f :> string) in
-        file_exists p_abs'
-        |> and_check is_file p_abs'
-      | Dir d ->
-        let p_abs' = Filename.concat p_abs (d :> string) in
-        file_exists p_abs'
-        |> and_check is_directory p_abs'
-      | Link (l, target) ->
-        let target_exists () =
-          match kind target with
-          | Abs_path p -> exists p
-          | Rel_path p -> exists_rel_path p_abs p
-        in
-        let p_abs' = Filename.concat p_abs (l :> string) in
-        file_exists p_abs'
-        |> and_check is_link p_abs'
-        |> and_check target_exists ()
+      | File f -> (
+          let p_abs' = Filename.concat p_abs (f :> string) in
+          file_exists p_abs' >>= function
+          | `No | `Unknown as x -> return x
+          | `Yes -> is_file p_abs'
+        )
+      | Dir d -> (
+          let p_abs' = Filename.concat p_abs (d :> string) in
+          file_exists p_abs' >>= function
+          | `No | `Unknown as x -> return x
+          | `Yes -> is_directory p_abs'
+        )
+      | Link (l, target) -> (
+          let target_exists () =
+            match kind target with
+            | Abs_path p -> exists p
+            | Rel_path p -> exists_rel_path p_abs p
+          in
+          let p_abs' = Filename.concat p_abs (l :> string) in
+          file_exists p_abs' >>= function
+          | `No | `Unknown as x -> return x
+          | `Yes ->
+            is_link p_abs' >>= function
+            | `No | `Unknown as x -> return x
+            | `Yes -> target_exists ()
+        )
 
 and exists_rel_path
     : type o. string -> (rel, o) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
@@ -67,12 +74,14 @@ and exists_rel_path
     fun p_abs p_rel ->
       match p_rel with
       | Item x -> exists_item p_abs x
-      | Cons (x, y) ->
-        exists_item p_abs x
-        |> and_check (fun (x,y) ->
+      | Cons (x, y) -> (
+          exists_item p_abs x >>= function
+          | `No | `Unknown as z -> return z
+          | `Yes ->
             exists_rel_path
               (Filename.concat p_abs (string_of_item x :> string))
-              y) (x, y)
+              y
+        )
 
 let sexp_of_unix_error =
   Tuple.T3.sexp_of_t
