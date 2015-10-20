@@ -31,7 +31,7 @@ LIB_DEPS(x) =
 
 MerlinFile()
 METAFile()
-OpamInstallFile(omake/Solvuu.om)
+OpamInstallFile($(EMPTY))
 CleanCommands()
 CheckErrors()
 
