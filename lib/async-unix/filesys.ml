@@ -83,12 +83,6 @@ and exists_rel_path
               y
         )
 
-let sexp_of_unix_error =
-  Tuple.T3.sexp_of_t
-    Unix.sexp_of_error
-    sexp_of_string
-    sexp_of_string
-
 let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   try_with (fun () -> Unix.lstat (to_string p)) >>|
   Or_error.of_exn_result >>| fun x ->
