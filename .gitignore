@@ -4,6 +4,7 @@
 /.omakedb.lock
 /OMakeroot.omc
 /etc/Solvuu.omc
+/phat.install
 /tmp/
 /.merlin
 *~
