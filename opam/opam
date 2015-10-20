@@ -19,6 +19,7 @@ depends: [
   "ounit" {test}
   "core" {>= "111.13.00"}
   "async"
+  "ppx_sexp_conv"
   "sexplib"
 ]
 

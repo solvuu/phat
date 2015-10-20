@@ -9,13 +9,13 @@ open Result.Monad_infix
 (******************************************************************************)
 (* Types                                                                      *)
 (******************************************************************************)
-type name = string with sexp
+type name = string [@@deriving sexp]
 
-type abs = [`abs] with sexp
-type rel = [`rel] with sexp
+type abs = [`abs] [@@deriving sexp]
+type rel = [`rel] [@@deriving sexp]
 
-type dir = [`dir] with sexp
-type file = [`file] with sexp
+type dir = [`dir] [@@deriving sexp]
+type file = [`file] [@@deriving sexp]
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item
@@ -29,7 +29,7 @@ and ('kind,'obj) t =
   | Item : ('kind,'obj) item -> ('kind,'obj) t
   | Cons : ('a,dir) item * (rel,'obj) t -> ('a,'obj) t
 
-with sexp_of
+[@@deriving sexp_of]
 
 type 'a of_some_kind =
   | Abs_path of (abs,'a) t
@@ -235,8 +235,8 @@ module Elem : sig
   val file_of_elems : elems -> (abs,file) t Or_error.t
 
 end = struct
-  type elem = string with sexp
-  type elems = elem list with sexp
+  type elem = string [@@deriving sexp]
+  type elems = elem list [@@deriving sexp]
 
   let elem s = match s with
     | "/" | "" | "." | ".." -> Ok s
