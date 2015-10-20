@@ -59,11 +59,13 @@ open Core_kernel.Std
     exclude reserved names such as ".", "", "..", and "/". *)
 type name = private string [@@deriving sexp]
 
-type abs = [`abs] [@@deriving sexp] (** absolute path, phantom type *)
-type rel = [`rel] [@@deriving sexp] (** relative path, phantom type *)
+(** Indicate whether a path is absolute or relative. *)
+type abs = [`abs] [@@deriving sexp]
+type rel = [`rel] [@@deriving sexp]
 
-type file = [`file] [@@deriving sexp] (** regular file, phantom type *)
-type dir  = [`dir]  [@@deriving sexp] (** directory, phantom type *)
+(** Type of a filesystem object. *)
+type file = [`file] [@@deriving sexp]
+type dir  = [`dir] [@@deriving sexp]
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item
