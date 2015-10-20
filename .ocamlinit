@@ -1,0 +1,11 @@
+#use "topfind";;
+#thread;;
+#require "core async future.unix";;
+
+#directory "_build/lib";;
+#load "phat-pure.cma";;
+#load "phat-async-unix.cma";;
+
+open Core.Std;;
+open Async.Std;;
+open Phat_async_unix.Std;;
