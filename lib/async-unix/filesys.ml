@@ -155,25 +155,25 @@ and mkdir_aux
           | Rel_path dir -> mkdir_aux seen' p_abs dir
           | Abs_path dir -> mkdir_main seen' dir
         )
-    | Cons (Dir n, p_rel') -> (
-        let p_abs' = concat p_abs (Item (Dir n)) in
-        exists p_abs' >>= (fun x -> match x with
+      | Cons (Dir n, p_rel') -> (
+          let p_abs' = concat p_abs (Item (Dir n)) in
+          exists p_abs' >>= (fun x -> match x with
             | `Yes -> return (Ok ())
             | `No | `Unknown -> unix_mkdir p_abs'
-        ) >>=? fun () ->
-        mkdir_aux seen' p_abs' p_rel'
-      )
-    | Cons (Link (_, dir) as l, p_rel') -> (
-      unix_symlink (concat p_abs (Item l)) ~targets:dir >>=? fun () ->
-      match kind dir with
-      | Rel_path dir ->
-        mkdir_aux seen' p_abs (concat dir p_rel')
-      | Abs_path dir ->
-        mkdir_main seen' (concat dir p_rel')
-      )
-    | Cons (Dot, p_rel') -> mkdir_aux seen' p_abs p_rel'
-    | Cons (Dotdot, p_rel') ->
-      mkdir_aux seen' (parent p_abs) p_rel'
+          ) >>=? fun () ->
+          mkdir_aux seen' p_abs' p_rel'
+        )
+      | Cons (Link (_, dir) as l, p_rel') -> (
+          unix_symlink (concat p_abs (Item l)) ~targets:dir >>=? fun () ->
+          match kind dir with
+          | Rel_path dir ->
+            mkdir_aux seen' p_abs (concat dir p_rel')
+          | Abs_path dir ->
+            mkdir_main seen' (concat dir p_rel')
+        )
+      | Cons (Dot, p_rel') -> mkdir_aux seen' p_abs p_rel'
+      | Cons (Dotdot, p_rel') ->
+        mkdir_aux seen' (parent p_abs) p_rel'
 
 and mkdir p =
   mkdir_main Path_set.empty p >>| fun _ ->
