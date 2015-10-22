@@ -1,6 +1,6 @@
 #use "topfind";;
 #thread;;
-#require "core async future.unix";;
+#require "core async ppx_deriving ppx_sexp_conv sexplib oUnit";;
 
 #directory "_build/lib";;
 #load "phat-pure.cma";;
