@@ -60,12 +60,12 @@ open Core_kernel.Std
 type name = private string [@@deriving sexp]
 
 (** Indicate whether a path is absolute or relative. *)
-type abs = [`abs] [@@deriving sexp]
-type rel = [`rel] [@@deriving sexp]
+type abs = [`abs]
+type rel = [`rel]
 
 (** Type of a filesystem object. *)
-type file = [`file] [@@deriving sexp]
-type dir  = [`dir] [@@deriving sexp]
+type file = [`file]
+type dir  = [`dir]
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item
@@ -83,8 +83,10 @@ type 'a of_some_kind =
   | Abs_path of (abs,'a) t
   | Rel_path of (rel,'a) t
 
-type file_path = (abs,file) t
-type dir_path = (abs,dir) t
+type file_path = (abs,file) t [@@deriving sexp]
+type rel_file_path = (rel,file) t [@@deriving sexp]
+type dir_path = (abs,dir) t [@@deriving sexp]
+type rel_dir_path = (rel,dir) t [@@deriving sexp]
 
 val equal : ('absrel,'kind) t -> ('absrel,'kind) t -> bool
 

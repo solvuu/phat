@@ -11,11 +11,11 @@ open Result.Monad_infix
 (******************************************************************************)
 type name = string [@@deriving sexp]
 
-type abs = [`abs] [@@deriving sexp]
-type rel = [`rel] [@@deriving sexp]
+type abs = [`abs] [@@deriving sexp_of]
+type rel = [`rel] [@@deriving sexp_of]
 
-type dir = [`dir] [@@deriving sexp]
-type file = [`file] [@@deriving sexp]
+type dir = [`dir] [@@deriving sexp_of]
+type file = [`file] [@@deriving sexp_of]
 
 type ('kind,'obj) item =
   | Root : (abs,dir) item
@@ -35,9 +35,81 @@ type 'a of_some_kind =
   | Abs_path of (abs,'a) t
   | Rel_path of (rel,'a) t
 
-type file_path = (abs,file) t
-type dir_path = (abs,dir) t
+type file_path = (abs,file) t [@@deriving sexp_of]
+type rel_file_path = (rel,file) t [@@deriving sexp_of]
+type dir_path = (abs,dir) t [@@deriving sexp_of]
+type rel_dir_path = (rel,dir) t [@@deriving sexp_of]
 
+(******************************************************************************)
+(* Deserializers - those that ppx_sexp_conv can't derive                      *)
+(******************************************************************************)
+let rec rel_dir_item_of_sexp sexp : (rel,dir) item =
+  match sexp with
+  | Sexp.List [Sexp.Atom "Dir"; name] ->
+    Dir (name_of_sexp name)
+  | Sexp.List [Sexp.Atom "Link"; name; t] ->
+    Link (name_of_sexp name, rel_dir_path_of_sexp t)
+  | Sexp.Atom "Dot" ->
+    Dot
+  | Sexp.Atom "Dotdot" ->
+    Dotdot
+  | _ ->
+    failwithf "invalid sexp for (rel,dir) item: %s"
+      (Sexp.to_string sexp) ()
+
+and abs_dir_item_of_sexp sexp : (abs,dir) item =
+  match sexp with
+  | Sexp.Atom "Root" ->
+    Root
+  | _ ->
+    failwithf "invalid sexp for (abs,dir) item: %s"
+      (Sexp.to_string sexp) ()
+
+and rel_file_item_of_sexp sexp : (rel,file) item =
+  match sexp with
+  | Sexp.List [Sexp.Atom "File"; name] ->
+    File (name_of_sexp name)
+  | _ ->
+    failwithf "invalid sexp for (rel,file) item: %s"
+      (Sexp.to_string sexp) ()
+
+and rel_file_path_of_sexp sexp : rel_file_path =
+  match sexp with
+  | Sexp.List [Sexp.Atom "Item"; item] ->
+    Item (rel_file_item_of_sexp item)
+  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
+    Cons (rel_dir_item_of_sexp item, rel_file_path_of_sexp t)
+  | _ ->
+    failwithf "invalid sexp for (rel,file) t: %s"
+      (Sexp.to_string sexp) ()
+
+and file_path_of_sexp sexp : file_path =
+  match sexp with
+  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
+    Cons (abs_dir_item_of_sexp item, rel_file_path_of_sexp t)
+  | _ ->
+    failwithf "invalid sexp for (abs,file) t: %s"
+      (Sexp.to_string sexp) ()
+
+and rel_dir_path_of_sexp sexp : (rel,dir) t =
+  match sexp with
+  | Sexp.List [Sexp.Atom "Item"; item] ->
+    Item (rel_dir_item_of_sexp item)
+  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
+    Cons (rel_dir_item_of_sexp item, rel_dir_path_of_sexp t)
+  | _ ->
+    failwithf "invalid sexp for (rel,dir) t: %s"
+      (Sexp.to_string sexp) ()
+
+and dir_path_of_sexp sexp : dir_path =
+  match sexp with
+  | Sexp.List [Sexp.Atom "Item"; item] ->
+    Item (abs_dir_item_of_sexp item)
+  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
+    Cons (abs_dir_item_of_sexp item, rel_dir_path_of_sexp t)
+  | _ ->
+    failwithf "invalid sexp for (abs,dir) t: %s"
+      (Sexp.to_string sexp) ()
 
 (******************************************************************************)
 (* Names                                                                      *)
