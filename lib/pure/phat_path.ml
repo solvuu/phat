@@ -48,7 +48,13 @@ let rec rel_dir_item_of_sexp sexp : (rel,dir) item =
   | Sexp.List [Sexp.Atom "Dir"; name] ->
     Dir (name_of_sexp name)
   | Sexp.List [Sexp.Atom "Link"; name; t] ->
-    Link (name_of_sexp name, rel_dir_path_of_sexp t)
+    let name = name_of_sexp name in
+    (
+      try
+        Link (name, rel_dir_path_of_sexp t)
+      with Failure _ ->
+        Link (name, dir_path_of_sexp t)
+    )
   | Sexp.Atom "Dot" ->
     Dot
   | Sexp.Atom "Dotdot" ->
@@ -69,6 +75,14 @@ and rel_file_item_of_sexp sexp : (rel,file) item =
   match sexp with
   | Sexp.List [Sexp.Atom "File"; name] ->
     File (name_of_sexp name)
+  | Sexp.List [Sexp.Atom "Link"; name; t] ->
+    let name = name_of_sexp name in
+    (
+      try
+        Link (name, rel_file_path_of_sexp t)
+      with Failure _ ->
+        Link (name, file_path_of_sexp t)
+    )
   | _ ->
     failwithf "invalid sexp for (rel,file) item: %s"
       (Sexp.to_string sexp) ()

@@ -35,10 +35,24 @@ let rec random_rel_dir_item ?(no_link = false) ?root ?level () =
   | false, true -> Path.Dot
   | false, false -> Path.Dotdot
 
+and random_rel_file_item ?(no_link = false) ?root ?level () =
+  if no_link || Random.float 1. > 0.1 then
+    Path.File (new_name ())
+  else (
+    Path.map_any_kind (random_file_path ~no_link ?root ?level ()) { Path.map = fun p ->
+        Path.Link (new_name (), p)
+      }
+  )
+
 and random_dir_path ?no_link ?root ?level () =
   match Random.bool () with
   | true -> Path.Abs_path (random_abs_dir_path ?no_link ?root ?level ())
   | false -> Path.Rel_path (random_rel_dir_path ?no_link ?root ?level ())
+
+and random_file_path ?no_link ?root ?level () =
+  match Random.bool () with
+  | true -> Path.Abs_path (random_abs_file_path ?no_link ?root ?level ())
+  | false -> Path.Rel_path (random_rel_file_path ?no_link ?root ?level ())
 
 and random_abs_dir_path ?no_link ?(root = Path.root) ?level () =
   Path.concat root (random_rel_dir_path ?no_link ~root ?level ())
@@ -50,6 +64,14 @@ and random_rel_dir_path ?no_link ?root ?level () =
     Path.Cons (d, random_rel_dir_path ?no_link ?root ?level ())
   else
     Path.Item d
+
+and random_abs_file_path ?no_link ?(root = Path.root) ?level () =
+  Path.concat root (random_rel_file_path ?no_link ~root ?level ())
+
+and random_rel_file_path ?no_link ?root ?level () =
+  Path.concat
+    (random_rel_dir_path ?no_link ?root ?level:(Option.map level ~f:(fun x -> x - 1)) ())
+    (Path.Item (random_rel_file_item ?no_link ?root ?level ()))
 
 (* [random_path_resolving_to p] generates a path that resolves to what
    [p] resolves (the name is a tiny bit misleading) *)
@@ -82,6 +104,27 @@ let name_constructor _ =
         assert_failure msg
       | Error _ -> ()
     )
+
+let sexp_serialization _ =
+  let check path_of_sexp p =
+    try
+      let p' = path_of_sexp (Path.sexp_of_t p) in
+      assert_equal ~printer:Path.to_string p p'
+    with Failure msg ->
+      let msg =
+        sprintf
+          "Deserialization failed\nPath:\n%s\nSexp:\n%s\nBacktrace:\n%s\nError:\n%s"
+          (Path.to_string p)
+          (Sexp.to_string_hum (Path.sexp_of_t p))
+          (Printexc.get_backtrace ())
+          msg
+      in
+      assert_failure msg
+  in
+  for _ = 1 to 1000 do
+    check Path.dir_path_of_sexp (random_abs_dir_path ()) ;
+    check Path.file_path_of_sexp (random_abs_file_path ())
+  done
 
 let normalization _ =
   let check p =
@@ -220,17 +263,17 @@ let filesys_mkdir ctx =
     (
       Filesys.mkdir p >>= function
       | Ok () -> (
-	Filesys.exists p >>| function
-	| `Yes -> ()
-	| `No
-	| `Unknown ->
-	   let msg =
-             sprintf
-               "Filesys.mkdir failed to create path %s"
-               (Sexp.to_string_hum (Path.sexp_of_t p))
-           in
-           assert_failure msg
-      )
+          Filesys.exists p >>| function
+          | `Yes -> ()
+          | `No
+          | `Unknown ->
+            let msg =
+              sprintf
+                "Filesys.mkdir failed to create path %s"
+                (Sexp.to_string_hum (Path.sexp_of_t p))
+            in
+            assert_failure msg
+        )
       | Error e ->
         let msg =
           sprintf
@@ -261,6 +304,7 @@ let filesys_mkdir_cycles ctx =
 
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
+    "Sexp serialization" >:: sexp_serialization ;
     "Normalization" >:: normalization ;
     "Normalization is idempotent" >:: normalization_is_idempotent ;
     "Resolution eliminates links" >:: resolution_eliminates_links ;
