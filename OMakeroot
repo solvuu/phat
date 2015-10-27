@@ -8,7 +8,7 @@ VERSION = dev
 PACKAGES(x) =
   switch $(x)
   case pure
-    return core_kernel ppx_sexp_conv sexplib
+    return core_kernel ppx_here ppx_sexp_conv sexplib
   case async-unix
     return $(PACKAGES pure) async
   case run_ounit_tests

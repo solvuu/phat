@@ -34,3 +34,5 @@ module Result : sig
   end
 
 end
+
+val errorh : ?strict:unit -> string -> 'a -> Source_code_position.t -> ('a -> Sexp.t) -> 'b Or_error.t

@@ -10,7 +10,7 @@ module Result = struct
     let mapi (type error) l ~f =
       let module M = struct
         exception E of error
-	let the_fun () =
+        let the_fun () =
           let run () =
             List.mapi l ~f:(fun i x ->
               match f i x with
@@ -44,3 +44,10 @@ module Result = struct
 
   end
 end
+
+let or_error_tag_loc loc x =
+  Or_error.tag_arg x "Location" loc Source_code_position.sexp_of_t
+
+let errorh ?strict s x loc f =
+  error ?strict s x f
+  |> or_error_tag_loc loc
