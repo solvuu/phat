@@ -40,6 +40,13 @@ type rel_file_path = (rel,file) t [@@deriving sexp_of]
 type dir_path = (abs,dir) t [@@deriving sexp_of]
 type rel_dir_path = (rel,dir) t [@@deriving sexp_of]
 
+type ('o, 'a) mapper = { map : 'k. ('k, 'o) t -> 'a }
+
+let map_any_kind x mapper =
+  match x with
+  | Abs_path p -> mapper.map p
+  | Rel_path p -> mapper.map p
+
 (******************************************************************************)
 (* Deserializers - those that ppx_sexp_conv can't derive                      *)
 (******************************************************************************)
@@ -49,12 +56,7 @@ let rec rel_dir_item_of_sexp sexp : (rel,dir) item =
     Dir (name_of_sexp name)
   | Sexp.List [Sexp.Atom "Link"; name; t] ->
     let name = name_of_sexp name in
-    (
-      try
-        Link (name, rel_dir_path_of_sexp t)
-      with Failure _ ->
-        Link (name, dir_path_of_sexp t)
-    )
+    map_any_kind (any_dir_path_of_sexp t) { map = fun p -> Link (name, p) }
   | Sexp.Atom "Dot" ->
     Dot
   | Sexp.Atom "Dotdot" ->
@@ -77,12 +79,7 @@ and rel_file_item_of_sexp sexp : (rel,file) item =
     File (name_of_sexp name)
   | Sexp.List [Sexp.Atom "Link"; name; t] ->
     let name = name_of_sexp name in
-    (
-      try
-        Link (name, rel_file_path_of_sexp t)
-      with Failure _ ->
-        Link (name, file_path_of_sexp t)
-    )
+    map_any_kind (any_file_path_of_sexp t) { map = fun p -> Link (name, p) }
   | _ ->
     failwithf "invalid sexp for (rel,file) item: %s"
       (Sexp.to_string sexp) ()
@@ -124,6 +121,14 @@ and dir_path_of_sexp sexp : dir_path =
   | _ ->
     failwithf "invalid sexp for (abs,dir) t: %s"
       (Sexp.to_string sexp) ()
+
+and any_dir_path_of_sexp sexp : dir of_some_kind =
+  try Rel_path (rel_dir_path_of_sexp sexp)
+  with Failure _ -> Abs_path (dir_path_of_sexp sexp)
+
+and any_file_path_of_sexp sexp : file of_some_kind =
+  try Rel_path (rel_file_path_of_sexp sexp)
+  with Failure _ -> Abs_path (file_path_of_sexp sexp)
 
 (******************************************************************************)
 (* Names                                                                      *)
@@ -175,13 +180,6 @@ let rec has_link
     | Cons (_, p) -> has_link p
     | _ -> false
 
-
-type ('o, 'a) mapper = { map : 'k. ('k, 'o) t -> 'a }
-
-let map_any_kind x mapper =
-  match x with
-  | Abs_path p -> mapper.map p
-  | Rel_path p -> mapper.map p
 
 let kind
   : type k o. (k, o) t -> o of_some_kind
