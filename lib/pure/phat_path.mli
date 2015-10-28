@@ -112,6 +112,8 @@ val rel_dir_path : string -> (rel, dir) t Or_error.t
 (** Parse a relative file path. *)
 val rel_file_path : string -> (rel, file) t Or_error.t
 
+val file_path_of_some_kind : string -> file of_some_kind Or_error.t
+
 
 (** {2 Deconstructors} *)
 

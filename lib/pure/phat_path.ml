@@ -458,6 +458,14 @@ let dir_path s = elems s >>= dir_of_elems
 let rel_file_path s = elems s >>= rel_file_of_elems
 let file_path s = elems s >>= file_of_elems
 
+let file_path_of_some_kind s =
+  match rel_file_path s with
+  | Ok x -> Ok (Rel_path x)
+  | Error e1 ->
+    match file_path s with
+    | Ok x -> Ok (Abs_path x)
+    | Error e2 -> Error (Error.of_list [e1;e2])
+
 
 (******************************************************************************)
 (* Deconstructors                                                             *)
