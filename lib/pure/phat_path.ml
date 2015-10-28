@@ -197,6 +197,22 @@ let kind
     | Cons (Dot, _) -> Rel_path p
     | Cons (Link _, _) -> Rel_path p
 
+let rec obj_aux
+  : type k k' o. (k, o) t -> (k', o) t -> [ `File of (k, file) t | `Dir of (k, dir) t ]
+  = fun p suffix_p ->
+    match suffix_p with
+    | Item (File _) -> `File p
+    | Item (Link (_, p')) -> obj_aux p p'
+    | Item (Dir _) -> `Dir p
+    | Item Dot -> `Dir p
+    | Item Dotdot -> `Dir p
+    | Item Root -> `Dir p
+    | Cons (_, p') -> obj_aux p p'
+
+let obj
+  : type k. (k, _) t -> [ `File of (k, file) t | `Dir of (k, dir) t ]
+  = fun p -> obj_aux p p
+
 (******************************************************************************)
 (* Operators                                                                  *)
 (******************************************************************************)

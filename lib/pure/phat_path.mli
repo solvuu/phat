@@ -133,6 +133,8 @@ val map_any_kind : 'o of_some_kind -> ('o,'a) mapper -> 'a
 
 val kind : (_, 'o) t -> 'o of_some_kind
 
+val obj : ('k, _) t -> [ `File of ('k, file) t | `Dir of ('k, dir) t ]
+
 (** {2 Operators} *)
 
 val normalize : ('absrel, 'kind) t -> ('absrel, 'kind) t
