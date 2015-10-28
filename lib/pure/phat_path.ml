@@ -130,9 +130,9 @@ and dir_path_of_sexp sexp : dir_path =
 (******************************************************************************)
 let name s =
   if String.mem s '/' then
-    errorh "slash not allowed in file or directory name" s _here_ sexp_of_string
+    errorh _here_ "slash not allowed in file or directory name" s sexp_of_string
   else if s = "." || s = ".." || s = "" then
-    errorh "invalid file or directory name" s _here_ sexp_of_string
+    errorh _here_ "invalid file or directory name" s sexp_of_string
   else
     Ok s
 
@@ -352,12 +352,12 @@ end = struct
     match elems with
     | [] -> assert false
     | "/"::_ ->
-      errorh "relative path cannot begin with root directory"
-        elems _here_ sexp_of_elems
+      errorh _here_ "relative path cannot begin with root directory"
+        elems sexp_of_elems
     | _::tl ->
       if List.mem tl "/" then
-        errorh "root directory can only occur as first item in path"
-          elems _here_ sexp_of_elems
+        errorh _here_ "root directory can only occur as first item in path"
+          elems sexp_of_elems
       else
         let item = function
           | "/" -> assert false
@@ -378,30 +378,30 @@ end = struct
     | "/"::[] -> Ok (Item Root)
     | "/"::tl -> (
       if List.mem tl "/" then
-        errorh "root directory can only occur as first item in path"
-          elems _here_ sexp_of_elems
+        errorh _here_ "root directory can only occur as first item in path"
+          elems sexp_of_elems
       else (
         rel_dir_of_elems tl >>| fun reldir ->
         Cons (Root, reldir)
       )
     )
     | _ ->
-      errorh "absolute path must begin with root directory"
-        elems _here_ sexp_of_elems
+      errorh _here_ "absolute path must begin with root directory"
+        elems sexp_of_elems
 
   let rel_file_of_elems elems : (rel,file) t Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::_ ->
-      errorh "relative path cannot begin with root directory"
-        elems _here_ sexp_of_elems
+      errorh _here_ "relative path cannot begin with root directory"
+        elems sexp_of_elems
     | _ -> (
       let elems_rev = List.rev elems in
       let last = List.hd_exn elems_rev in
       let elems = List.rev (List.tl_exn elems_rev) in
       match last with
       | "." | "" | ".." ->
-        errorh "path cannot be treated as file" elems _here_ sexp_of_elems
+        errorh _here_ "path cannot be treated as file" elems sexp_of_elems
       | _ ->
         match elems with
         | [] -> Ok (Item (File last))
@@ -414,22 +414,22 @@ end = struct
     match elems with
     | [] -> assert false
     | "/"::[] ->
-      errorh "root directory cannot be treated as file"
-        elems _here_ sexp_of_elems
+      errorh _here_ "root directory cannot be treated as file"
+        elems sexp_of_elems
     | "/"::rest-> (
       let rest_rev = List.rev rest in
       let last = List.hd_exn rest_rev in
       let rest = List.rev (List.tl_exn rest_rev) in
       match last with
       | "." | "" | ".." ->
-        errorh "path cannot be treated as file" elems _here_ sexp_of_elems
+        errorh _here_ "path cannot be treated as file" elems sexp_of_elems
       | _ ->
         dir_of_elems ("/"::rest) >>| fun dir ->
         concat dir (Item (File last))
     )
     | _ ->
-      errorh "absolute path must begin with root directory"
-        elems _here_ sexp_of_elems
+      errorh _here_ "absolute path must begin with root directory"
+        elems sexp_of_elems
 
 end
 open Elem

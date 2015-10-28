@@ -45,9 +45,15 @@ module Result = struct
   end
 end
 
-let or_error_tag_loc loc x =
-  Or_error.tag_arg x "Location" loc Source_code_position.sexp_of_t
+module Or_error = struct
+  include Or_error
 
-let errorh ?strict s x loc f =
+  let tag_loc loc x =
+    tag_arg x "Location" loc Source_code_position.sexp_of_t
+
+end
+
+
+let errorh ?strict loc s x f =
   error ?strict s x f
-  |> or_error_tag_loc loc
+  |> Or_error.tag_loc loc

@@ -1,6 +1,7 @@
 open Core.Std
 open Async.Std
 open Phat_pure.Std
+open Phat_pure.Core2
 open Path
 
 (** Async's [file_exists] has a
@@ -83,20 +84,15 @@ and exists_rel_path
               y
         )
 
-(* This function is already defined in pure/Core2, so this definition *)
-(* should be removed after the upcoming refactoring *)
-let or_error_tag_loc loc x =
-  Or_error.tag_arg x "Location" loc Source_code_position.sexp_of_t
-
 let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   try_with (fun () -> Unix.lstat (to_string p)) >>|
   Or_error.of_exn_result >>|
-  or_error_tag_loc _here_
+  Or_error.tag_loc _here_
 
 let wrap_unix loc f =
   try_with f >>|
   Or_error.of_exn_result >>|
-  or_error_tag_loc loc
+  Or_error.tag_loc loc
 
 let unix_mkdir p =
   wrap_unix _here_ (fun () -> Unix.mkdir (to_string p))

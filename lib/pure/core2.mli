@@ -35,4 +35,9 @@ module Result : sig
 
 end
 
-val errorh : ?strict:unit -> string -> 'a -> Source_code_position.t -> ('a -> Sexp.t) -> 'b Or_error.t
+module Or_error : sig
+  include module type of Or_error
+  val tag_loc : Source_code_position.t -> 'a Or_error.t -> 'a Or_error.t
+end
+
+val errorh : ?strict:unit -> Source_code_position.t -> string -> 'a -> ('a -> Sexp.t) -> 'b Or_error.t
