@@ -198,3 +198,12 @@ and mkdir_aux
 and mkdir p =
   mkdir_main Cursor_set.empty p >>| fun _ ->
   Ok ()
+
+let rec find_item item path =
+  match path with
+  | [] -> return None
+  | dir::path ->
+     let x = concat dir (Item item) in
+     exists x >>= function
+     | `Yes -> return (Some x)
+     | `Unknown | `No -> find_item item path
