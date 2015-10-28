@@ -292,15 +292,20 @@ let filesys_mkdir_cycles ctx =
   let rec foo_bar = Path.(Item (Link (name_exn "bar", baz_qux)))
   and baz_qux = Path.(Item (Link (name_exn "qux", foo_bar)))
   in
-  Filesys.mkdir (Path.concat tmpdir_path foo_bar) >>| function
-  | Ok () -> () (* FIXME: check that the paths were created correctly! *)
+  let p = Path.concat tmpdir_path foo_bar in
+  Filesys.mkdir p >>= function
+  | Ok () ->
+    Filesys.exists p >>| fun file_exists ->
+    if file_exists <> `Yes then (
+      assert_failure "Filesys.mkdir failed to create the cyclic path correctly."
+    )
   | Error e ->
     let msg =
       sprintf
         "Filesys.mkdir failed to create cyclic path: %s"
         (Sexp.to_string_hum (Error.sexp_of_t e))
     in
-    ignore (assert_failure msg)
+    assert_failure msg
 
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;

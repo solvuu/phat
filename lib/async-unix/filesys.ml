@@ -4,6 +4,20 @@ open Phat_pure.Std
 open Phat_pure.Core2
 open Path
 
+
+let and_check f x e =
+  match e with
+  | `Yes -> f x
+  | `No -> return `No
+  | `Unknown -> return `Unknown
+
+let and_check2 f (seen, e) =
+  match e with
+  | `Yes -> f seen
+  | `No -> return (seen, `No)
+  | `Unknown -> return (seen, `Unknown)
+
+
 (** Async's [file_exists] has a
     {{:https://github.com/janestreet/async_unix/issues/6}bug} that
     doesn't allow setting follow_symlinks to false. *)
@@ -26,63 +40,90 @@ let is_link p =
     | `File | `Directory | `Char | `Block | `Fifo | `Socket ->
       `No
 
-(* FIXME: exists is not immune to cyclic paths, use same procedure than
-   mkdir *)
-let rec exists
-  : type o. (abs, o) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
-  =
-  function
-  | Item Root -> return `Yes
-  | Cons (Root, p_rel) -> exists_rel_path "/" p_rel
+
+(* Represents a position in a path. This is useful when building or
+   checking a path, which is a step by step operation: each step is
+   performed by a recursive call on a (p_abs, p_rel) pair, with the
+   invariant that:
+   - the path that we want to build/check is concat p_abs p_rel
+   - p_abs has already been built/checked
+   - p_abs is resolved
+
+   In general, we'd like to avoid calling the recursive function twice
+   with the same arguments (to avoid duplicating work on shared
+   subtrees, or to be cycle-tolerant) and so the build/check function
+   will generally carry a set of cursors to remember which calls have
+   already been made.
+ *)
+module Path_cursor : sig
+  type t
+  val make : (_,_) Path.t -> (_,_) Path.t -> t
+  val compare : t -> t -> int
+  val t_of_sexp : Sexp.t -> t
+  val sexp_of_t : t -> Sexp.t
+end
+= struct
+  type t = P : (_,_) Path.t * (_,_) Path.t -> t
+  let make p q = P (p, q)
+  let compare = compare
+  let t_of_sexp _ = assert false
+  let sexp_of_t _ = assert false
+end
+
+module Cursor_set = struct
+  include Set.Make(Path_cursor)
+  let add set p q = add set (Path_cursor.make p q)
+  let mem set p q = mem set (Path_cursor.make p q)
+end
+
+let rec exists_main
+  : type o. Cursor_set.t -> (abs, o) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
+  = fun seen -> function
+    | Item Root -> return (seen, `Yes)
+    | Cons (Root, p_rel) -> exists_rel_path seen (Item Root) p_rel
 
 and exists_item
-    : type o. string -> (rel, o) item -> [ `Yes | `Unknown | `No ] Deferred.t
+    : type o. Cursor_set.t -> (abs, dir) Path.t -> (rel, o) item -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
     =
-    fun p_abs p_rel ->
-      match p_rel with
-      | Dot -> return `Yes
-      | Dotdot -> return `Yes
-      | File f -> (
-          let p_abs' = Filename.concat p_abs (f :> string) in
-          file_exists p_abs' >>= function
-          | `No | `Unknown as x -> return x
-          | `Yes -> is_file p_abs'
-        )
-      | Dir d -> (
-          let p_abs' = Filename.concat p_abs (d :> string) in
-          file_exists p_abs' >>= function
-          | `No | `Unknown as x -> return x
-          | `Yes -> is_directory p_abs'
-        )
-      | Link (l, target) -> (
-          let target_exists () =
-            match kind target with
-            | Abs_path p -> exists p
-            | Rel_path p -> exists_rel_path p_abs p
-          in
-          let p_abs' = Filename.concat p_abs (l :> string) in
-          file_exists p_abs' >>= function
-          | `No | `Unknown as x -> return x
-          | `Yes ->
-            is_link p_abs' >>= function
-            | `No | `Unknown as x -> return x
-            | `Yes -> target_exists ()
-        )
+    fun seen p_abs item ->
+      match item with
+      | Dot -> return (seen, `Yes)
+      | Dotdot -> return (seen, `Yes)
+      | File _ ->
+        let p_abs' = Path.to_string (concat p_abs (Item item)) in
+        file_exists p_abs' >>= and_check is_file p_abs' >>| fun file_exists ->
+        seen, file_exists
+      | Dir _ ->
+        let p_abs' = Path.to_string (concat p_abs (Item item)) in
+        file_exists p_abs' >>= and_check is_directory p_abs' >>| fun dir_exists ->
+        seen, dir_exists
+      | Link (_, target) ->
+        let target_exists seen =
+          match kind target with
+          | Abs_path p -> exists_main seen p
+          | Rel_path p -> exists_rel_path seen p_abs p
+        in
+        let p_abs' = Path.to_string (concat p_abs (Item item)) in
+        file_exists p_abs' >>= and_check is_link p_abs' >>= fun link_exists ->
+        (seen, link_exists) |> and_check2 target_exists
 
 and exists_rel_path
-    : type o. string -> (rel, o) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
+    : type o. Cursor_set.t -> (abs, dir) Path.t -> (rel, o) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
     =
-    fun p_abs p_rel ->
-      match p_rel with
-      | Item x -> exists_item p_abs x
-      | Cons (x, y) -> (
-          exists_item p_abs x >>= function
-          | `No | `Unknown as z -> return z
-          | `Yes ->
-            exists_rel_path
-              (Filename.concat p_abs (string_of_item x :> string))
-              y
-        )
+    fun seen p_abs p_rel ->
+      if Cursor_set.mem seen p_abs p_rel then return (seen, `Yes)
+      else (
+        let seen' = Cursor_set.add seen p_abs p_rel in
+        match p_rel with
+        | Item x -> exists_item seen' p_abs x
+        | Cons (x, y) ->
+          exists_item seen' p_abs x
+          >>= and_check2 (fun seen -> exists_rel_path seen (concat p_abs (Item x)) y)
+      )
+
+and exists p =
+  exists_main Cursor_set.empty p >>| snd
+
 
 let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   try_with (fun () -> Unix.lstat (to_string p)) >>|
@@ -102,30 +143,8 @@ let unix_symlink link_path ~targets:link_target =
       Unix.symlink ~dst:(to_string link_path) ~src:(to_string link_target)
     )
 
-module State : sig
-  type t
-  val make : (_,_) Path.t -> (_,_) Path.t -> t
-  val compare : t -> t -> int
-  val t_of_sexp : Sexp.t -> t
-  val sexp_of_t : t -> Sexp.t
-end
-= struct
-  type t = P : (_,_) Path.t * (_,_) Path.t -> t
-  let make p q = P (p, q)
-  let compare = compare
-  let t_of_sexp _ = assert false
-  let sexp_of_t _ = assert false
-end
-
-module Path_set = struct
-  include Set.Make(State)
-  let add set p q = add set (State.make p q)
-  let mem set p q = mem set (State.make p q)
-end
-
-
 let rec mkdir_main
-  : Path_set.t -> (abs, dir) Path.t -> Path_set.t Or_error.t Deferred.t
+  : Cursor_set.t -> (abs, dir) Path.t -> Cursor_set.t Or_error.t Deferred.t
   = fun seen p ->
     match p with
     | Item Root -> return (Ok seen)
@@ -133,11 +152,11 @@ let rec mkdir_main
       mkdir_aux seen root rel_p
 
 and mkdir_aux
-  : Path_set.t -> (abs, dir) Path.t -> (rel, dir) Path.t -> Path_set.t Or_error.t Deferred.t
+  : Cursor_set.t -> (abs, dir) Path.t -> (rel, dir) Path.t -> Cursor_set.t Or_error.t Deferred.t
   = fun seen p_abs p_rel ->
-    if Path_set.mem seen p_abs p_rel then return (Ok seen)
+    if Cursor_set.mem seen p_abs p_rel then return (Ok seen)
     else
-      let seen' = Path_set.add seen p_abs p_rel in
+      let seen' = Cursor_set.add seen p_abs p_rel in
       match p_rel with
       | Item (Dir _) -> (
           let p = concat p_abs p_rel in
@@ -177,5 +196,5 @@ and mkdir_aux
         mkdir_aux seen' (parent p_abs) p_rel'
 
 and mkdir p =
-  mkdir_main Path_set.empty p >>| fun _ ->
+  mkdir_main Cursor_set.empty p >>| fun _ ->
   Ok ()
