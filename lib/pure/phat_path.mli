@@ -66,12 +66,12 @@ open Core_kernel.Std
 type name = private string [@@deriving sexp]
 
 (** Indicate whether a path is absolute or relative. *)
-type abs = [`abs]
-type rel = [`rel]
+type abs = [`Abs]
+type rel = [`Rel]
 
 (** Indicate the type of file, i.e. a regular file or directory. *)
-type file = [`file]
-type dir  = [`dir]
+type file = [`File]
+type dir  = [`Dir]
 
 type ('kind,'typ) item =
   | Root : (abs,dir) item
@@ -85,9 +85,15 @@ and ('kind,'typ) t =
   | Item : ('kind,'typ) item -> ('kind,'typ) t
   | Cons : ('kind,dir) item * (rel,'typ) t -> ('kind,'typ) t
 
-type 'typ of_any_kind =
-  | Abs of (abs,'typ) t
-  | Rel of (rel,'typ) t
+type 'typ of_any_kind = [
+  | `Abs of (abs,'typ) t
+  | `Rel of (rel,'typ) t
+]
+
+type 'kind of_any_typ = [
+  | `File of ('kind, file) t
+  | `Dir of ('kind, dir) t
+]
 
 type abs_file = (abs,file) t [@@deriving sexp]
 type rel_file = (rel,file) t [@@deriving sexp]
@@ -140,9 +146,9 @@ type ('typ, 'a) map_any_kind = { map : 'kind. ('kind, 'typ) t -> 'a }
 
 val map_any_kind : 'typ of_any_kind -> ('typ,'a) map_any_kind -> 'a
 
-val kind : (_, 'typ) t -> 'typ of_any_kind
+val kind_of : (_, 'typ) t -> 'typ of_any_kind
 
-val obj : ('kind, _) t -> [ `File of ('kind, file) t | `Dir of ('kind, dir) t ]
+val typ_of : ('kind, _) t -> 'kind of_any_typ
 
 
 (** {2 Operators} *)

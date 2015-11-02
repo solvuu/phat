@@ -11,11 +11,11 @@ open Result.Monad_infix
 (******************************************************************************)
 type name = string [@@deriving sexp]
 
-type abs = [`abs] [@@deriving sexp_of]
-type rel = [`rel] [@@deriving sexp_of]
+type abs = [`Abs] [@@deriving sexp_of]
+type rel = [`Rel] [@@deriving sexp_of]
 
-type dir = [`dir] [@@deriving sexp_of]
-type file = [`file] [@@deriving sexp_of]
+type dir = [`Dir] [@@deriving sexp_of]
+type file = [`File] [@@deriving sexp_of]
 
 type ('kind,'typ) item =
   | Root : (abs,dir) item
@@ -31,9 +31,15 @@ and ('kind,'typ) t =
 
 [@@deriving sexp_of]
 
-type 'typ of_any_kind =
-  | Abs of (abs,'typ) t
-  | Rel of (rel,'typ) t
+type 'typ of_any_kind = [
+  | `Abs of (abs,'typ) t
+  | `Rel of (rel,'typ) t
+]
+
+type 'kind of_any_typ = [
+  | `File of ('kind, file) t
+  | `Dir of ('kind, dir) t
+]
 
 type abs_file = (abs,file) t [@@deriving sexp_of]
 type rel_file = (rel,file) t [@@deriving sexp_of]
@@ -44,8 +50,8 @@ type ('typ, 'a) map_any_kind = { map : 'kind. ('kind, 'typ) t -> 'a }
 
 let map_any_kind x mapper =
   match x with
-  | Abs p -> mapper.map p
-  | Rel p -> mapper.map p
+  | `Abs p -> mapper.map p
+  | `Rel p -> mapper.map p
 
 
 (******************************************************************************)
@@ -124,12 +130,12 @@ and abs_dir_of_sexp sexp : abs_dir =
       (Sexp.to_string sexp) ()
 
 and dir_of_any_kind_of_sexp sexp : dir of_any_kind =
-  try Rel (rel_dir_of_sexp sexp)
-  with Failure _ -> Abs (abs_dir_of_sexp sexp)
+  try `Rel (rel_dir_of_sexp sexp)
+  with Failure _ -> `Abs (abs_dir_of_sexp sexp)
 
 and file_of_any_kind_of_sexp sexp : file of_any_kind =
-  try Rel (rel_file_of_sexp sexp)
-  with Failure _ -> Abs (abs_file_of_sexp sexp)
+  try `Rel (rel_file_of_sexp sexp)
+  with Failure _ -> `Abs (abs_file_of_sexp sexp)
 
 (******************************************************************************)
 (* Names                                                                      *)
@@ -183,24 +189,24 @@ let rec has_link
     | _ -> false
 
 
-let kind
+let kind_of
   : type a b. (a,b) t -> b of_any_kind
   = fun p ->
     match p with
-    | Item Root -> Abs p
-    | Item (File _) -> Rel p
-    | Item (Dir _) -> Rel p
-    | Item Dot -> Rel p
-    | Item Dotdot -> Rel p
-    | Item (Link _) -> Rel p
-    | Cons (Root, _) -> Abs p
-    | Cons (Dir _, _) -> Rel p
-    | Cons (Dotdot, _) -> Rel p
-    | Cons (Dot, _) -> Rel p
-    | Cons (Link _, _) -> Rel p
+    | Item Root -> `Abs p
+    | Item (File _) -> `Rel p
+    | Item (Dir _) -> `Rel p
+    | Item Dot -> `Rel p
+    | Item Dotdot -> `Rel p
+    | Item (Link _) -> `Rel p
+    | Cons (Root, _) -> `Abs p
+    | Cons (Dir _, _) -> `Rel p
+    | Cons (Dotdot, _) -> `Rel p
+    | Cons (Dot, _) -> `Rel p
+    | Cons (Link _, _) -> `Rel p
 
 let rec obj_aux
-  : type k k' b. (k, b) t -> (k', b) t -> [ `File of (k, file) t | `Dir of (k, dir) t ]
+  : type k k' b. (k, b) t -> (k', b) t -> k of_any_typ
   = fun p suffix_p ->
     match suffix_p with
     | Item (File _) -> `File p
@@ -211,8 +217,8 @@ let rec obj_aux
     | Item Root -> `Dir p
     | Cons (_, p') -> obj_aux p p'
 
-let obj
-  : type k. (k, _) t -> [ `File of (k, file) t | `Dir of (k, dir) t ]
+let typ_of
+  : type k. (k, _) t -> k of_any_typ
   = fun p -> obj_aux p p
 
 
@@ -232,26 +238,26 @@ let rec resolve_any_kind : type a b. (a,b) t -> b of_any_kind =
   | Item x -> resolve_item x
   | Cons (item, path) ->
     match resolve_item item, resolve_any_kind path with
-    | Rel x, Rel y -> Rel (concat x y)
-    | _, Abs y -> Abs y
-    | Abs x, Rel y -> Abs (concat x y)
+    | `Rel x, `Rel y -> `Rel (concat x y)
+    | _, `Abs y -> `Abs y
+    | `Abs x, `Rel y -> `Abs (concat x y)
 
 and resolve_item : type a b. (a,b) item -> b of_any_kind = fun x ->
   match x with
-  | Root -> Abs (Item x)
-  | File _ -> Rel (Item x)
-  | Dir _ -> Rel (Item x)
+  | Root -> `Abs (Item x)
+  | File _ -> `Rel (Item x)
+  | Dir _ -> `Rel (Item x)
   | Link (_, target) -> resolve_any_kind target
-  | Dot -> Rel (Item x)
-  | Dotdot -> Rel (Item x)
+  | Dot -> `Rel (Item x)
+  | Dotdot -> `Rel (Item x)
 
 and resolve : type b. (abs,b) t -> (abs,b) t =
   function
   | Item Root as x -> x
   | Cons (Root as x, path) ->
     match resolve_any_kind path with
-    | Abs y -> y
-    | Rel y -> Cons (x, y)
+    | `Abs y -> y
+    | `Rel y -> Cons (x, y)
 
 let rec parent : type a b. (a,b) t -> (a,dir) t =
   fun path -> match path with
@@ -463,10 +469,10 @@ let abs_file s = elems s >>= abs_file_of_elems
 
 let file_of_any_kind s =
   match rel_file s with
-  | Ok x -> Ok (Rel x)
+  | Ok x -> Ok (`Rel x)
   | Error e1 ->
     match abs_file s with
-    | Ok x -> Ok (Abs x)
+    | Ok x -> Ok (`Abs x)
     | Error e2 -> Error (Error.of_list [e1;e2])
 
 

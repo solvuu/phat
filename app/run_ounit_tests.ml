@@ -46,13 +46,13 @@ and random_rel_file_item ?(no_link = false) ?root ?level () =
 
 and random_dir_path ?no_link ?root ?level () =
   match Random.bool () with
-  | true -> Phat.Abs (random_abs_dir_path ?no_link ?root ?level ())
-  | false -> Phat.Rel (random_rel_dir_path ?no_link ?root ?level ())
+  | true -> `Abs (random_abs_dir_path ?no_link ?root ?level ())
+  | false -> `Rel (random_rel_dir_path ?no_link ?root ?level ())
 
 and random_file_path ?no_link ?root ?level () =
   match Random.bool () with
-  | true -> Phat.Abs (random_abs_file_path ?no_link ?root ?level ())
-  | false -> Phat.Rel (random_rel_file_path ?no_link ?root ?level ())
+  | true -> `Abs (random_abs_file_path ?no_link ?root ?level ())
+  | false -> `Rel (random_rel_file_path ?no_link ?root ?level ())
 
 and random_abs_dir_path ?no_link ?(root = Phat.root) ?level () =
   Phat.concat root (random_rel_dir_path ?no_link ~root ?level ())
@@ -78,11 +78,11 @@ and random_rel_file_path ?no_link ?root ?level () =
 and random_path_resolving_to ?root ?level p () =
   let link = Phat.map_any_kind p { Phat.map = fun p -> Phat.Link (new_name (), p) } in
   if Random.float 1. < 0.1 then
-    Phat.Rel (Phat.Item link)
+    `Rel (Phat.Item link)
   else
     match random_dir_path ?root ?level () with
-    | Phat.Abs dir -> Phat.(Abs (concat dir (Item link)))
-    | Phat.Rel dir -> Phat.(Rel (concat dir (Item link)))
+    | `Abs dir -> `Abs (Phat.concat dir (Phat.Item link))
+    | `Rel dir -> `Rel (Phat.concat dir (Phat.Item link))
 
 and random_path_with_link ?root ?level () =
   random_path_resolving_to (random_dir_path ?root ?level ())
@@ -139,8 +139,8 @@ let normalization _ =
   in
   for _ = 1 to 1000 do
     match random_dir_path () with
-    | Phat.Abs dir -> check dir
-    | Phat.Rel dir -> check dir
+    | `Abs dir -> check dir
+    | `Rel dir -> check dir
   done
 
 let normalization_is_idempotent _ =
@@ -176,12 +176,12 @@ let resolution_for_eventually_abs_paths _ =
   in
   for _ = 1 to 1000 do
     let p_ref = random_abs_dir_path ~no_link:true () in
-    match random_path_resolving_to (Phat.Abs p_ref) () with
-    | Phat.Abs p -> check p_ref p (Phat.resolve p)
-    | Phat.Rel p ->
+    match random_path_resolving_to (`Abs p_ref) () with
+    | `Abs p -> check p_ref p (Phat.resolve p)
+    | `Rel p ->
       match Phat.resolve_any_kind p with
-      | Phat.Abs p_res -> check p_ref p p_res
-      | Phat.Rel p_res -> failure p_ref p p_res
+      | `Abs p_res -> check p_ref p p_res
+      | `Rel p_res -> failure p_ref p p_res
   done
 
 let resolution_is_identity_for_paths_without_links _ =
@@ -199,11 +199,11 @@ let resolution_is_identity_for_paths_without_links _ =
   in
   for _ = 1 to 1000 do
     match random_dir_path ~no_link:true () with
-    | Phat.Abs dir -> check dir (Phat.resolve dir)
-    | Phat.Rel dir ->
+    | `Abs dir -> check dir (Phat.resolve dir)
+    | `Rel dir ->
       match Phat.resolve_any_kind dir with
-      | Phat.Abs dir' -> failure dir dir'
-      | Phat.Rel dir' -> check dir dir'
+      | `Abs dir' -> failure dir dir'
+      | `Rel dir' -> check dir dir'
   done
 
 let resolution_eliminates_links _ =

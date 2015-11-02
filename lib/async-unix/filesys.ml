@@ -99,9 +99,9 @@ and exists_item
         seen, dir_exists
       | Path.Link (_, target) ->
         let target_exists seen =
-          match Path.kind target with
-          | Path.Abs p -> exists_main seen p
-          | Path.Rel p -> exists_rel_path seen p_abs p
+          match Path.kind_of target with
+          | `Abs p -> exists_main seen p
+          | `Rel p -> exists_rel_path seen p_abs p
         in
         let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
         file_exists p_abs' >>= and_check is_link p_abs' >>= fun link_exists ->
@@ -171,9 +171,9 @@ and mkdir_aux
       | Path.Item (Path.Link (_, dir)) -> (
           let p = Path.concat p_abs p_rel in
           unix_symlink p ~targets:dir >>=? fun () ->
-          match Path.kind dir with
-          | Path.Rel dir -> mkdir_aux seen' p_abs dir
-          | Path.Abs dir -> mkdir_main seen' dir
+          match Path.kind_of dir with
+          | `Rel dir -> mkdir_aux seen' p_abs dir
+          | `Abs dir -> mkdir_main seen' dir
         )
       | Path.Cons (Path.Dir n, p_rel') -> (
           let p_abs' = Path.concat p_abs (Path.Item (Path.Dir n)) in
@@ -185,10 +185,10 @@ and mkdir_aux
         )
       | Path.Cons (Path.Link (_, dir) as l, p_rel') -> (
           unix_symlink (Path.concat p_abs (Path.Item l)) ~targets:dir >>=? fun () ->
-          match Path.kind dir with
-          | Path.Rel dir ->
+          match Path.kind_of dir with
+          | `Rel dir ->
             mkdir_aux seen' p_abs (Path.concat dir p_rel')
-          | Path.Abs dir ->
+          | `Abs dir ->
             mkdir_main seen' (Path.concat dir p_rel')
         )
       | Path.Cons (Path.Dot, p_rel') -> mkdir_aux seen' p_abs p_rel'
