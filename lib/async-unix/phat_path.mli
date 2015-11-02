@@ -1,9 +1,9 @@
 open Core.Std
 open Async.Std
 
-include module type of Phat_pure.Std.Path
+include module type of Phat_pure.Phat_path
 
 val abs_file_of_any
-  :  ?base_dir:dir_path
+  :  ?base_dir:abs_dir
   -> string
-  -> file_path Or_error.t Deferred.t
+  -> abs_file Or_error.t Deferred.t

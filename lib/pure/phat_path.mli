@@ -6,29 +6,27 @@
     empty string "" is equivalent to ".", and both are parsed to
     [Dot].
 
-    We represent such a list with type {!path}, which has 2 phantom
-    type parameters:
+    We represent such a list with a GADT {!t}, which has 2 type
+    parameters:
 
     - 'kind: is either [abs] or [rel]. The first item in an absolute
     path is "/", the root directory. The first item in a relative path
     is guaranteed not to be "/".
 
-    - 'obj: is either [file] or [dir] and indicates the type of the
-    object identified by the path. This is a property of the last item
+    - 'typ: is either [file] or [dir] and indicates the type of the
+    file identified by the path. This is a property of the last item
     in a path. Every non-last item must be a directory.
 
-    These phantom types restrict operations in sensible ways. For
+    These type parameters restrict operations in sensible ways. For
     example, you can request the items under a directory but not under
-    a file.
+    a regular file.
 
     Only absolute paths can resolve to an actual file or directory in
     your filesystem. A relative path cannot; it is incomplete in the
     sense that it is unknown what (absolute) directory the path is
     relative to. Said another way, an absolute path is truly a path,
     but a relative path is an abstraction, which, when given an
-    absolute directory prefix, will yield a (absolute) path. Thus,
-    naming choices often exclude "abs"; it is implied that "path"
-    means "absolute path".
+    absolute directory prefix, will yield a (absolute) path.
 
     A normalized path contains the minimum number of [Dot]s and
     [Dotdot]s possible. For an absolute path, this means there are no
@@ -37,22 +35,30 @@
     a consecutive sequence of [Dotdot]s at the beginning followed by
     only named items.
 
-    A resolved path does not contain any links. Resolving a path means
-    to replace occuring links by the path they represent. The kind of
-    the path may change in the process: a relative path may become
-    absolute after resolution (converse not true). However, resolving
-    a path will not change the type of the object it identifies.
+    A resolved path does not contain any links. Resolving a path
+    replaces links by its target. The kind of the path may change in
+    the process: a relative path may become absolute after resolution
+    (but not vice versa). However, resolving a path will not change
+    the type of the object it identifies.
 
-    Paths are semantically [equal] if they point to the same location,
-    even after resolution. Only paths of the same type can be tested
-    for equality. It is assumed that a relative path is always
-    different from an absolute path, and a file path is always
-    different from a directory path even though their string
-    representations might be equal.
+    We have defined [equal p q] to mean [p] and [q] are the same after
+    normalization, i.e. disregarding [Dot]s and [Dotdot]s that don't
+    affect the final path being referred to. This is not the only
+    possible choice; one might also want to disregard links and say
+    paths are equal if they resolve to the same path. However, we
+    believe that users of this library will often care about the link
+    structure of a path, so we did not choose this definition. One can
+    check this alternate definition of equality by manually calling
+    [resolve] first, so there is no limitation. On the other hand, one
+    might care even about the [Dot]s and [Dotdot]s, in which case you
+    can call OCaml's polymorphic equality [Pervasives.equal]. Only
+    paths of the same kind and type can be tested for equality, even
+    though the string representations could be equal for paths not
+    satisfying these criteria.
 
     Windows paths are not supported, but that would be a simple
     extension if anyone requests it.
-*)
+ *)
 open Core_kernel.Std
 
 (** User chosen file or directory name. By "user chosen" we mean to
@@ -63,56 +69,57 @@ type name = private string [@@deriving sexp]
 type abs = [`abs]
 type rel = [`rel]
 
-(** Type of a filesystem object. *)
+(** Indicate the type of file, i.e. a regular file or directory. *)
 type file = [`file]
 type dir  = [`dir]
 
-type ('kind,'obj) item =
+type ('kind,'typ) item =
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
-  | Link : name * (_,'obj) t -> (rel,'obj) item
+  | Link : name * (_,'typ) t -> (rel,'typ) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
-and ('kind,'obj) t =
-  | Item : ('kind,'obj) item -> ('kind,'obj) t
-  | Cons : ('a,dir) item * (rel,'obj) t -> ('a,'obj) t
+and ('kind,'typ) t =
+  | Item : ('kind,'typ) item -> ('kind,'typ) t
+  | Cons : ('kind,dir) item * (rel,'typ) t -> ('kind,'typ) t
 
-type 'a of_some_kind =
-  | Abs_path of (abs,'a) t
-  | Rel_path of (rel,'a) t
+type 'typ of_any_kind =
+  | Abs of (abs,'typ) t
+  | Rel of (rel,'typ) t
 
-type file_path = (abs,file) t [@@deriving sexp]
-type rel_file_path = (rel,file) t [@@deriving sexp]
-type dir_path = (abs,dir) t [@@deriving sexp]
-type rel_dir_path = (rel,dir) t [@@deriving sexp]
+type abs_file = (abs,file) t [@@deriving sexp]
+type rel_file = (rel,file) t [@@deriving sexp]
+type abs_dir = (abs,dir) t [@@deriving sexp]
+type rel_dir = (rel,dir) t [@@deriving sexp]
 
-val equal : ('absrel,'kind) t -> ('absrel,'kind) t -> bool
+val equal : ('kind,'typ) t -> ('kind,'typ) t -> bool
 
 
 (** {2 Constructors} *)
 
 (** Unix root directory "/". *)
-val root : (abs, dir) t
+val root : abs_dir
 
 (** Parse a name. *)
 val name : string -> name Or_error.t
 val name_exn : string -> name
 
 (** Parse an absolute directory path. *)
-val dir_path : string -> (abs, dir) t Or_error.t
+val abs_dir : string -> abs_dir Or_error.t
 
 (** Parse an absolute file path. *)
-val file_path : string -> (abs, file) t Or_error.t
+val abs_file : string -> abs_file Or_error.t
 
 (** Parse a relative directory path. *)
-val rel_dir_path : string -> (rel, dir) t Or_error.t
+val rel_dir : string -> rel_dir Or_error.t
 
 (** Parse a relative file path. *)
-val rel_file_path : string -> (rel, file) t Or_error.t
+val rel_file : string -> rel_file Or_error.t
 
-val file_path_of_some_kind : string -> file of_some_kind Or_error.t
+(** Parse an absolute or relative file path. *)
+val file_of_any_kind : string -> file of_any_kind Or_error.t
 
 
 (** {2 Deconstructors} *)
@@ -120,8 +127,8 @@ val file_path_of_some_kind : string -> file of_some_kind Or_error.t
 val to_list : (_, _) t -> string list
 val to_string : (_, _) t -> string
 val sexp_of_t : (_, _) t -> Sexp.t
-
 val string_of_item : (_, _) item -> string
+
 
 (** {2 Visitors} *)
 
@@ -129,25 +136,25 @@ val is_normalized : (_, _) t -> bool
 
 val has_link : (_, _) t -> bool
 
-type ('o, 'a) mapper = { map : 'k. ('k, 'o) t -> 'a }
+type ('typ, 'a) map_any_kind = { map : 'kind. ('kind, 'typ) t -> 'a }
 
-val map_any_kind : 'o of_some_kind -> ('o,'a) mapper -> 'a
+val map_any_kind : 'typ of_any_kind -> ('typ,'a) map_any_kind -> 'a
 
-val kind : (_, 'o) t -> 'o of_some_kind
+val kind : (_, 'typ) t -> 'typ of_any_kind
 
-val obj : ('k, _) t -> [ `File of ('k, file) t | `Dir of ('k, dir) t ]
+val obj : ('kind, _) t -> [ `File of ('kind, file) t | `Dir of ('kind, dir) t ]
+
 
 (** {2 Operators} *)
 
-val normalize : ('absrel, 'kind) t -> ('absrel, 'kind) t
+val normalize : ('kind, 'typ) t -> ('kind, 'typ) t
 
-val concat : ('a, dir) t -> (rel, 'kind) t -> ('a, 'kind) t
+val concat : ('kind, dir) t -> (rel, 'typ) t -> ('kind, 'typ) t
 
 (** Follow all links. Returned value guaranteed not to contain any
     instance of [Link]. *)
-val resolve : (abs, 'o) t -> (abs, 'o) t
+val resolve : (abs, 'typ) t -> (abs, 'typ) t
 
-val resolve_any : ('k, 'o) t -> 'o of_some_kind
+val resolve_any_kind : ('kind, 'typ) t -> 'typ of_any_kind
 
-val parent : ('absrel, _) t -> ('absrel, dir) t
-
+val parent : ('kind, _) t -> ('kind, dir) t

@@ -1,3 +1,3 @@
-module About = Phat_pure.Std.About
-module Filesys = Filesys
-module Path = Phat_path
+include Phat_pure.About
+include Phat_path
+include Filesys

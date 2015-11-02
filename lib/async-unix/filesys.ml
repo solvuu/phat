@@ -1,9 +1,7 @@
 open Core.Std
-open Async.Std
-open Phat_pure.Std
 open Phat_pure.Core2
-open Path
-
+open Async.Std
+module Path = Phat_path
 
 let and_check f x e =
   match e with
@@ -77,48 +75,50 @@ module Cursor_set = struct
 end
 
 let rec exists_main
-  : type o. Cursor_set.t -> (abs, o) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
-  = fun seen -> function
+  : type typ. Cursor_set.t -> (Path.abs, typ) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
+  =
+  let open Path in
+  fun seen -> function
     | Item Root -> return (seen, `Yes)
     | Cons (Root, p_rel) -> exists_rel_path seen (Item Root) p_rel
 
 and exists_item
-    : type o. Cursor_set.t -> (abs, dir) Path.t -> (rel, o) item -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
+    : type typ. Cursor_set.t -> Path.abs_dir -> (Path.rel,typ) Path.item -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
     =
     fun seen p_abs item ->
       match item with
-      | Dot -> return (seen, `Yes)
-      | Dotdot -> return (seen, `Yes)
-      | File _ ->
-        let p_abs' = Path.to_string (concat p_abs (Item item)) in
+      | Path.Dot -> return (seen, `Yes)
+      | Path.Dotdot -> return (seen, `Yes)
+      | Path.File _ ->
+        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
         file_exists p_abs' >>= and_check is_file p_abs' >>| fun file_exists ->
         seen, file_exists
-      | Dir _ ->
-        let p_abs' = Path.to_string (concat p_abs (Item item)) in
+      | Path.Dir _ ->
+        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
         file_exists p_abs' >>= and_check is_directory p_abs' >>| fun dir_exists ->
         seen, dir_exists
-      | Link (_, target) ->
+      | Path.Link (_, target) ->
         let target_exists seen =
-          match kind target with
-          | Abs_path p -> exists_main seen p
-          | Rel_path p -> exists_rel_path seen p_abs p
+          match Path.kind target with
+          | Path.Abs p -> exists_main seen p
+          | Path.Rel p -> exists_rel_path seen p_abs p
         in
-        let p_abs' = Path.to_string (concat p_abs (Item item)) in
+        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
         file_exists p_abs' >>= and_check is_link p_abs' >>= fun link_exists ->
         (seen, link_exists) |> and_check2 target_exists
 
 and exists_rel_path
-    : type o. Cursor_set.t -> (abs, dir) Path.t -> (rel, o) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
+    : type typ. Cursor_set.t -> Path.abs_dir -> (Path.rel,typ) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
     =
     fun seen p_abs p_rel ->
       if Cursor_set.mem seen p_abs p_rel then return (seen, `Yes)
       else (
         let seen' = Cursor_set.add seen p_abs p_rel in
         match p_rel with
-        | Item x -> exists_item seen' p_abs x
-        | Cons (x, y) ->
+        | Path.Item x -> exists_item seen' p_abs x
+        | Path.Cons (x, y) ->
           exists_item seen' p_abs x
-          >>= and_check2 (fun seen -> exists_rel_path seen (concat p_abs (Item x)) y)
+          >>= and_check2 (fun seen -> exists_rel_path seen (Path.concat p_abs (Path.Item x)) y)
       )
 
 and exists p =
@@ -126,7 +126,7 @@ and exists p =
 
 
 let lstat p : Unix.Stats.t Or_error.t Deferred.t =
-  try_with (fun () -> Unix.lstat (to_string p)) >>|
+  try_with (fun () -> Unix.lstat (Path.to_string p)) >>|
   Or_error.of_exn_result >>|
   Or_error.tag_loc _here_
 
@@ -136,64 +136,64 @@ let wrap_unix loc f =
   Or_error.tag_loc loc
 
 let unix_mkdir p =
-  wrap_unix _here_ (fun () -> Unix.mkdir (to_string p))
+  wrap_unix _here_ (fun () -> Unix.mkdir (Path.to_string p))
 
 let unix_symlink link_path ~targets:link_target =
   wrap_unix _here_ (fun () ->
-      Unix.symlink ~dst:(to_string link_path) ~src:(to_string link_target)
+      Unix.symlink ~dst:(Path.to_string link_path) ~src:(Path.to_string link_target)
     )
 
 let rec mkdir_main
-  : Cursor_set.t -> (abs, dir) Path.t -> Cursor_set.t Or_error.t Deferred.t
+  : Cursor_set.t -> Path.abs_dir -> Cursor_set.t Or_error.t Deferred.t
   = fun seen p ->
     match p with
-    | Item Root -> return (Ok seen)
-    | Cons (Root, rel_p) ->
-      mkdir_aux seen root rel_p
+    | Path.Item Path.Root -> return (Ok seen)
+    | Path.Cons (Path.Root, rel_p) ->
+      mkdir_aux seen Path.root rel_p
 
 and mkdir_aux
-  : Cursor_set.t -> (abs, dir) Path.t -> (rel, dir) Path.t -> Cursor_set.t Or_error.t Deferred.t
+  : Cursor_set.t -> Path.abs_dir -> Path.rel_dir -> Cursor_set.t Or_error.t Deferred.t
   = fun seen p_abs p_rel ->
     if Cursor_set.mem seen p_abs p_rel then return (Ok seen)
     else
       let seen' = Cursor_set.add seen p_abs p_rel in
       match p_rel with
-      | Item (Dir _) -> (
-          let p = concat p_abs p_rel in
+      | Path.Item (Path.Dir _) -> (
+          let p = Path.concat p_abs p_rel in
           exists p >>= (fun x -> match x with
             | `Yes -> return (Ok ())
             | `No | `Unknown -> unix_mkdir p
           ) >>|? fun () ->
           seen'
         )
-      | Item Dot -> return (Ok seen')
-      | Item Dotdot -> return (Ok seen')
-      | Item (Link (_, dir)) -> (
-          let p = concat p_abs p_rel in
+      | Path.Item Path.Dot -> return (Ok seen')
+      | Path.Item Path.Dotdot -> return (Ok seen')
+      | Path.Item (Path.Link (_, dir)) -> (
+          let p = Path.concat p_abs p_rel in
           unix_symlink p ~targets:dir >>=? fun () ->
-          match kind dir with
-          | Rel_path dir -> mkdir_aux seen' p_abs dir
-          | Abs_path dir -> mkdir_main seen' dir
+          match Path.kind dir with
+          | Path.Rel dir -> mkdir_aux seen' p_abs dir
+          | Path.Abs dir -> mkdir_main seen' dir
         )
-      | Cons (Dir n, p_rel') -> (
-          let p_abs' = concat p_abs (Item (Dir n)) in
+      | Path.Cons (Path.Dir n, p_rel') -> (
+          let p_abs' = Path.concat p_abs (Path.Item (Path.Dir n)) in
           exists p_abs' >>= (fun x -> match x with
             | `Yes -> return (Ok ())
             | `No | `Unknown -> unix_mkdir p_abs'
           ) >>=? fun () ->
           mkdir_aux seen' p_abs' p_rel'
         )
-      | Cons (Link (_, dir) as l, p_rel') -> (
-          unix_symlink (concat p_abs (Item l)) ~targets:dir >>=? fun () ->
-          match kind dir with
-          | Rel_path dir ->
-            mkdir_aux seen' p_abs (concat dir p_rel')
-          | Abs_path dir ->
-            mkdir_main seen' (concat dir p_rel')
+      | Path.Cons (Path.Link (_, dir) as l, p_rel') -> (
+          unix_symlink (Path.concat p_abs (Path.Item l)) ~targets:dir >>=? fun () ->
+          match Path.kind dir with
+          | Path.Rel dir ->
+            mkdir_aux seen' p_abs (Path.concat dir p_rel')
+          | Path.Abs dir ->
+            mkdir_main seen' (Path.concat dir p_rel')
         )
-      | Cons (Dot, p_rel') -> mkdir_aux seen' p_abs p_rel'
-      | Cons (Dotdot, p_rel') ->
-        mkdir_aux seen' (parent p_abs) p_rel'
+      | Path.Cons (Path.Dot, p_rel') -> mkdir_aux seen' p_abs p_rel'
+      | Path.Cons (Path.Dotdot, p_rel') ->
+        mkdir_aux seen' (Path.parent p_abs) p_rel'
 
 and mkdir p =
   mkdir_main Cursor_set.empty p >>| fun _ ->
@@ -203,7 +203,7 @@ let rec find_item item path =
   match path with
   | [] -> return None
   | dir::path ->
-     let x = concat dir (Item item) in
+     let x = Path.concat dir (Path.Item item) in
      exists x >>= function
      | `Yes -> return (Some x)
      | `Unknown | `No -> find_item item path

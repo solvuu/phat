@@ -17,35 +17,36 @@ type rel = [`rel] [@@deriving sexp_of]
 type dir = [`dir] [@@deriving sexp_of]
 type file = [`file] [@@deriving sexp_of]
 
-type ('kind,'obj) item =
+type ('kind,'typ) item =
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
-  | Link : name * (_,'obj) t -> (rel,'obj) item
+  | Link : name * (_,'typ) t -> (rel,'typ) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
-and ('kind,'obj) t =
-  | Item : ('kind,'obj) item -> ('kind,'obj) t
-  | Cons : ('a,dir) item * (rel,'obj) t -> ('a,'obj) t
+and ('kind,'typ) t =
+  | Item : ('kind,'typ) item -> ('kind,'typ) t
+  | Cons : ('a,dir) item * (rel,'typ) t -> ('a,'typ) t
 
 [@@deriving sexp_of]
 
-type 'a of_some_kind =
-  | Abs_path of (abs,'a) t
-  | Rel_path of (rel,'a) t
+type 'typ of_any_kind =
+  | Abs of (abs,'typ) t
+  | Rel of (rel,'typ) t
 
-type file_path = (abs,file) t [@@deriving sexp_of]
-type rel_file_path = (rel,file) t [@@deriving sexp_of]
-type dir_path = (abs,dir) t [@@deriving sexp_of]
-type rel_dir_path = (rel,dir) t [@@deriving sexp_of]
+type abs_file = (abs,file) t [@@deriving sexp_of]
+type rel_file = (rel,file) t [@@deriving sexp_of]
+type abs_dir = (abs,dir) t [@@deriving sexp_of]
+type rel_dir = (rel,dir) t [@@deriving sexp_of]
 
-type ('o, 'a) mapper = { map : 'k. ('k, 'o) t -> 'a }
+type ('typ, 'a) map_any_kind = { map : 'kind. ('kind, 'typ) t -> 'a }
 
 let map_any_kind x mapper =
   match x with
-  | Abs_path p -> mapper.map p
-  | Rel_path p -> mapper.map p
+  | Abs p -> mapper.map p
+  | Rel p -> mapper.map p
+
 
 (******************************************************************************)
 (* Deserializers - those that ppx_sexp_conv can't derive                      *)
@@ -54,9 +55,9 @@ let rec rel_dir_item_of_sexp sexp : (rel,dir) item =
   match sexp with
   | Sexp.List [Sexp.Atom "Dir"; name] ->
     Dir (name_of_sexp name)
-  | Sexp.List [Sexp.Atom "Link"; name; t] ->
+  | Sexp.List [Sexp.Atom "Link"; name; x] ->
     let name = name_of_sexp name in
-    map_any_kind (any_dir_path_of_sexp t) { map = fun p -> Link (name, p) }
+    map_any_kind (dir_of_any_kind_of_sexp x) { map = fun p -> Link (name, p) }
   | Sexp.Atom "Dot" ->
     Dot
   | Sexp.Atom "Dotdot" ->
@@ -77,58 +78,58 @@ and rel_file_item_of_sexp sexp : (rel,file) item =
   match sexp with
   | Sexp.List [Sexp.Atom "File"; name] ->
     File (name_of_sexp name)
-  | Sexp.List [Sexp.Atom "Link"; name; t] ->
+  | Sexp.List [Sexp.Atom "Link"; name; x] ->
     let name = name_of_sexp name in
-    map_any_kind (any_file_path_of_sexp t) { map = fun p -> Link (name, p) }
+    map_any_kind (file_of_any_kind_of_sexp x) { map = fun p -> Link (name, p) }
   | _ ->
     failwithf "invalid sexp for (rel,file) item: %s"
       (Sexp.to_string sexp) ()
 
-and rel_file_path_of_sexp sexp : rel_file_path =
+and rel_file_of_sexp sexp : rel_file =
   match sexp with
   | Sexp.List [Sexp.Atom "Item"; item] ->
     Item (rel_file_item_of_sexp item)
-  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
-    Cons (rel_dir_item_of_sexp item, rel_file_path_of_sexp t)
+  | Sexp.List [Sexp.Atom "Cons"; item; x] ->
+    Cons (rel_dir_item_of_sexp item, rel_file_of_sexp x)
   | _ ->
     failwithf "invalid sexp for (rel,file) t: %s"
       (Sexp.to_string sexp) ()
 
-and file_path_of_sexp sexp : file_path =
+and abs_file_of_sexp sexp : abs_file =
   match sexp with
-  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
-    Cons (abs_dir_item_of_sexp item, rel_file_path_of_sexp t)
+  | Sexp.List [Sexp.Atom "Cons"; item; x] ->
+    Cons (abs_dir_item_of_sexp item, rel_file_of_sexp x)
   | _ ->
     failwithf "invalid sexp for (abs,file) t: %s"
       (Sexp.to_string sexp) ()
 
-and rel_dir_path_of_sexp sexp : (rel,dir) t =
+and rel_dir_of_sexp sexp : (rel,dir) t =
   match sexp with
   | Sexp.List [Sexp.Atom "Item"; item] ->
     Item (rel_dir_item_of_sexp item)
-  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
-    Cons (rel_dir_item_of_sexp item, rel_dir_path_of_sexp t)
+  | Sexp.List [Sexp.Atom "Cons"; item; x] ->
+    Cons (rel_dir_item_of_sexp item, rel_dir_of_sexp x)
   | _ ->
     failwithf "invalid sexp for (rel,dir) t: %s"
       (Sexp.to_string sexp) ()
 
-and dir_path_of_sexp sexp : dir_path =
+and abs_dir_of_sexp sexp : abs_dir =
   match sexp with
   | Sexp.List [Sexp.Atom "Item"; item] ->
     Item (abs_dir_item_of_sexp item)
-  | Sexp.List [Sexp.Atom "Cons"; item; t] ->
-    Cons (abs_dir_item_of_sexp item, rel_dir_path_of_sexp t)
+  | Sexp.List [Sexp.Atom "Cons"; item; x] ->
+    Cons (abs_dir_item_of_sexp item, rel_dir_of_sexp x)
   | _ ->
     failwithf "invalid sexp for (abs,dir) t: %s"
       (Sexp.to_string sexp) ()
 
-and any_dir_path_of_sexp sexp : dir of_some_kind =
-  try Rel_path (rel_dir_path_of_sexp sexp)
-  with Failure _ -> Abs_path (dir_path_of_sexp sexp)
+and dir_of_any_kind_of_sexp sexp : dir of_any_kind =
+  try Rel (rel_dir_of_sexp sexp)
+  with Failure _ -> Abs (abs_dir_of_sexp sexp)
 
-and any_file_path_of_sexp sexp : file of_some_kind =
-  try Rel_path (rel_file_path_of_sexp sexp)
-  with Failure _ -> Abs_path (file_path_of_sexp sexp)
+and file_of_any_kind_of_sexp sexp : file of_any_kind =
+  try Rel (rel_file_of_sexp sexp)
+  with Failure _ -> Abs (abs_file_of_sexp sexp)
 
 (******************************************************************************)
 (* Names                                                                      *)
@@ -143,18 +144,19 @@ let name s =
 
 let name_exn s = name s |> ok_exn
 
+
 (******************************************************************************)
 (* Visitors                                                                   *)
 (******************************************************************************)
 
 let rec is_normalized
-  : type k o. (k, o) t -> bool
+  : type a b. (a,b) t -> bool
   = function
     | Item _ -> true
     | p -> is_normalized_no_dot p
 
 and is_normalized_no_dot
-  : type k o. (k, o) t -> bool
+  : type a b. (a,b) t -> bool
   = function
     | Item Dot -> false
     | Cons (Dot, _) -> false
@@ -163,7 +165,7 @@ and is_normalized_no_dot
     | Cons (_, p') -> is_normalized_no_dot_or_dotdot p'
 
 and is_normalized_no_dot_or_dotdot
-  : type k o. (k, o) t -> bool
+  : type a b. (a,b) t -> bool
   = function
     | Item Dot -> false
     | Item Dotdot -> false
@@ -173,7 +175,7 @@ and is_normalized_no_dot_or_dotdot
     | Cons (_, p') -> is_normalized_no_dot_or_dotdot p'
 
 let rec has_link
-  : type k o. (k, o) t -> bool
+  : type a b. (a,b) t -> bool
   = function
     | Item (Link _) -> true
     | Cons (Link _, _) -> true
@@ -182,23 +184,23 @@ let rec has_link
 
 
 let kind
-  : type k o. (k, o) t -> o of_some_kind
+  : type a b. (a,b) t -> b of_any_kind
   = fun p ->
     match p with
-    | Item Root -> Abs_path p
-    | Item (File _) -> Rel_path p
-    | Item (Dir _) -> Rel_path p
-    | Item Dot -> Rel_path p
-    | Item Dotdot -> Rel_path p
-    | Item (Link _) -> Rel_path p
-    | Cons (Root, _) -> Abs_path p
-    | Cons (Dir _, _) -> Rel_path p
-    | Cons (Dotdot, _) -> Rel_path p
-    | Cons (Dot, _) -> Rel_path p
-    | Cons (Link _, _) -> Rel_path p
+    | Item Root -> Abs p
+    | Item (File _) -> Rel p
+    | Item (Dir _) -> Rel p
+    | Item Dot -> Rel p
+    | Item Dotdot -> Rel p
+    | Item (Link _) -> Rel p
+    | Cons (Root, _) -> Abs p
+    | Cons (Dir _, _) -> Rel p
+    | Cons (Dotdot, _) -> Rel p
+    | Cons (Dot, _) -> Rel p
+    | Cons (Link _, _) -> Rel p
 
 let rec obj_aux
-  : type k k' o. (k, o) t -> (k', o) t -> [ `File of (k, file) t | `Dir of (k, dir) t ]
+  : type k k' b. (k, b) t -> (k', b) t -> [ `File of (k, file) t | `Dir of (k, dir) t ]
   = fun p suffix_p ->
     match suffix_p with
     | Item (File _) -> `File p
@@ -213,44 +215,45 @@ let obj
   : type k. (k, _) t -> [ `File of (k, file) t | `Dir of (k, dir) t ]
   = fun p -> obj_aux p p
 
+
 (******************************************************************************)
 (* Operators                                                                  *)
 (******************************************************************************)
 
 let rec concat
-  : type a kind. (a,dir) t -> (rel, kind) t -> (a,kind) t
+  : type a b. (a,dir) t -> (rel,b) t -> (a,b) t
   = fun x y ->
     match x with
     | Item x -> Cons (x,y)
     | Cons (x1,x2) -> Cons (x1, concat x2 y)
 
-let rec resolve_any : type k o. (k,o) t -> o of_some_kind =
+let rec resolve_any_kind : type a b. (a,b) t -> b of_any_kind =
   function
   | Item x -> resolve_item x
   | Cons (item, path) ->
-    match resolve_item item, resolve_any path with
-    | Rel_path x, Rel_path y -> Rel_path (concat x y)
-    | _, Abs_path y -> Abs_path y
-    | Abs_path x, Rel_path y -> Abs_path (concat x y)
+    match resolve_item item, resolve_any_kind path with
+    | Rel x, Rel y -> Rel (concat x y)
+    | _, Abs y -> Abs y
+    | Abs x, Rel y -> Abs (concat x y)
 
-and resolve_item : type k o . (k,o) item -> o of_some_kind = fun x ->
+and resolve_item : type a b. (a,b) item -> b of_any_kind = fun x ->
   match x with
-  | Root -> Abs_path (Item x)
-  | File _ -> Rel_path (Item x)
-  | Dir _ -> Rel_path (Item x)
-  | Link (_, target) -> resolve_any target
-  | Dot -> Rel_path (Item x)
-  | Dotdot -> Rel_path (Item x)
+  | Root -> Abs (Item x)
+  | File _ -> Rel (Item x)
+  | Dir _ -> Rel (Item x)
+  | Link (_, target) -> resolve_any_kind target
+  | Dot -> Rel (Item x)
+  | Dotdot -> Rel (Item x)
 
-and resolve : type o. (abs,o) t -> (abs, o) t =
+and resolve : type b. (abs,b) t -> (abs,b) t =
   function
   | Item Root as x -> x
   | Cons (Root as x, path) ->
-    match resolve_any path with
-    | Abs_path y -> y
-    | Rel_path y -> Cons (x, y)
+    match resolve_any_kind path with
+    | Abs y -> y
+    | Rel y -> Cons (x, y)
 
-let rec parent : type a b . (a,b) t -> (a,dir) t =
+let rec parent : type a b. (a,b) t -> (a,dir) t =
   fun path -> match path with
   | Item Root -> path
   | Item (File _) -> Item Dot
@@ -260,7 +263,7 @@ let rec parent : type a b . (a,b) t -> (a,dir) t =
   | Item Dotdot -> Cons (Dotdot, path)
   | Cons (item, path) -> Cons(item, parent path)
 
-let rec normalize : type a b . (a,b) t -> (a,b) t =
+let rec normalize : type a b. (a,b) t -> (a,b) t =
   fun path -> match path with
     | Item _ -> path
     | Cons (dir, path_tail) ->
@@ -329,10 +332,10 @@ module Elem : sig
 
   val item_to_elem : (_,_) item -> elem
 
-  val rel_dir_of_elems : elems -> (rel,dir) t Or_error.t
-  val dir_of_elems : elems -> (abs,dir) t Or_error.t
-  val rel_file_of_elems : elems -> (rel,file) t Or_error.t
-  val file_of_elems : elems -> (abs,file) t Or_error.t
+  val rel_dir_of_elems : elems -> rel_dir Or_error.t
+  val abs_dir_of_elems : elems -> abs_dir Or_error.t
+  val rel_file_of_elems : elems -> rel_file Or_error.t
+  val abs_file_of_elems : elems -> abs_file Or_error.t
 
 end = struct
   type elem = string [@@deriving sexp_of]
@@ -362,7 +365,7 @@ end = struct
     | Dot -> "."
     | Dotdot -> ".."
 
-  let rel_dir_of_elems elems : (rel,dir) t Or_error.t =
+  let rel_dir_of_elems elems : rel_dir Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::_ ->
@@ -386,7 +389,7 @@ end = struct
         in
         Ok (loop elems)
 
-  let dir_of_elems elems : (abs,dir) t Or_error.t =
+  let abs_dir_of_elems elems : abs_dir Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::[] -> Ok (Item Root)
@@ -403,7 +406,7 @@ end = struct
       errorh _here_ "absolute path must begin with root directory"
         elems sexp_of_elems
 
-  let rel_file_of_elems elems : (rel,file) t Or_error.t =
+  let rel_file_of_elems elems : rel_file Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::_ ->
@@ -424,7 +427,7 @@ end = struct
           concat dir (Item (File last))
     )
 
-  let file_of_elems elems : (abs,file) t Or_error.t =
+  let abs_file_of_elems elems : abs_file Or_error.t =
     match elems with
     | [] -> assert false
     | "/"::[] ->
@@ -438,7 +441,7 @@ end = struct
       | "." | "" | ".." ->
         errorh _here_ "path cannot be treated as file" elems sexp_of_elems
       | _ ->
-        dir_of_elems ("/"::rest) >>| fun dir ->
+        abs_dir_of_elems ("/"::rest) >>| fun dir ->
         concat dir (Item (File last))
     )
     | _ ->
@@ -453,37 +456,38 @@ open Elem
 (* Constructors                                                               *)
 (******************************************************************************)
 let root = Item Root
-let rel_dir_path s = elems s >>= rel_dir_of_elems
-let dir_path s = elems s >>= dir_of_elems
-let rel_file_path s = elems s >>= rel_file_of_elems
-let file_path s = elems s >>= file_of_elems
+let rel_dir s = elems s >>= rel_dir_of_elems
+let abs_dir s = elems s >>= abs_dir_of_elems
+let rel_file s = elems s >>= rel_file_of_elems
+let abs_file s = elems s >>= abs_file_of_elems
 
-let file_path_of_some_kind s =
-  match rel_file_path s with
-  | Ok x -> Ok (Rel_path x)
+let file_of_any_kind s =
+  match rel_file s with
+  | Ok x -> Ok (Rel x)
   | Error e1 ->
-    match file_path s with
-    | Ok x -> Ok (Abs_path x)
+    match abs_file s with
+    | Ok x -> Ok (Abs x)
     | Error e2 -> Error (Error.of_list [e1;e2])
 
 
 (******************************************************************************)
 (* Deconstructors                                                             *)
 (******************************************************************************)
-let rec to_elem_list : type a b . (a,b) t -> elem list = function
+let rec to_elem_list : type a b. (a,b) t -> elem list = function
   | Item x -> [item_to_elem x]
   | Cons (item, path) -> (item_to_elem item) :: (to_elem_list path)
 
 let to_list path = (to_elem_list path :> string list)
 
-let to_string t =
-  to_list t |> function
+let to_string x =
+  to_list x |> function
   | "/"::path -> "/" ^ (String.concat ~sep:"/" path)
   | path -> String.concat ~sep:"/" path
 
-(* since 'k and 'o are phantom types in ('k, 'o) t, we don't need
-   conversion functions for them, but sexp is not smart enough to see
+(* since 'k and 't are unused types in ('k, 't) path, we don't need
+   conversion functions for them, but ppx_sexp_conv is not smart enough to see
    that. *)
-let sexp_of_t p = sexp_of_t (fun _ -> assert false) (fun _ -> assert false) p
+let sexp_of_t p =
+  sexp_of_t (fun _ -> assert false) (fun _ -> assert false) p
 
 let string_of_item x = (Elem.item_to_elem x :> string)
