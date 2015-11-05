@@ -1,9 +1,14 @@
+(* We don't provide a corresponding mli because of
+   {{:https://sympa.inria.fr/sympa/arc/caml-list/2015-11/msg00002.html}this}.
+   The workaround would require manually copying too much code. *)
 open Core.Std
 open Async.Std
 
 include Phat_pure.Phat_path
 
-let abs_file_of_any ?base_dir x : abs_file Or_error.t Deferred.t =
+let abs_file_of_any ?(base_dir:abs_dir option) (x:string)
+  : abs_file Or_error.t Deferred.t
+  =
   match file_of_any_kind x with
   | Error _ as e -> return e
   | Ok (`Abs x) -> return (Ok x)
