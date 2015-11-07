@@ -15,6 +15,10 @@ let and_check2 f (seen, e) =
   | `No -> return (seen, `No)
   | `Unknown -> return (seen, `Unknown)
 
+let negate = function
+  | `Yes -> `No
+  | `No -> `Yes
+  | `Unknown -> `Unknown
 
 (** Async's [file_exists] has a
     {{:https://github.com/janestreet/async_unix/issues/6}bug} that
@@ -106,6 +110,7 @@ and exists_item
             | "/" :: _ -> target_as_str
             | _ -> Filename.concat (Path.to_string p_abs) target_as_str
           )
+          >>| negate
         in
         let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
         file_exists p_abs'

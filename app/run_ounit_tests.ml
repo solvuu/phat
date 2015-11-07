@@ -226,7 +226,8 @@ let create_test_directory path =
   Unix.mkdir (f "foo") >>= fun () ->
   Unix.mkdir (f "foo/bar") >>= fun () ->
   Writer.save (f "foo/bar/baz") ~contents:"baz" >>= fun () ->
-  Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux")
+  Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux") >>= fun () ->
+  Unix.symlink ~src:"foo/bar/booz" ~dst:(f "broken")
 
 let filesys_exists ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
@@ -247,11 +248,13 @@ let filesys_exists ctx =
   let foo_bar = Phat.(concat foo (Item (Dir (name_exn "bar")))) in
   let foo_bar_baz = Phat.(concat foo_bar (Item (File (name_exn "baz")))) in
   let qux = Phat.(Item (Link (name_exn "qux", foo_bar_baz))) in
+  let broken = Phat.(Item (Broken_link (name_exn "broken", List.map ["foo" ; "bar" ; "booz" ] ~f:name_exn))) in
   create_test_directory tmpdir >>= fun () ->
   check foo >>= fun () ->
   check foo_bar >>= fun () ->
   check foo_bar_baz >>= fun () ->
-  check qux
+  check qux >>= fun () ->
+  check broken
 
 
 let filesys_mkdir ctx =
