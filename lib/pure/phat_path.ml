@@ -16,12 +16,14 @@ type rel = [`Rel] [@@deriving sexp_of]
 
 type dir = [`Dir] [@@deriving sexp_of]
 type file = [`File] [@@deriving sexp_of]
+type link = [`Link]
 
 type ('kind,'typ) item =
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
   | Link : name * (_,'typ) t -> (rel,'typ) item
+  | Broken_link : name * name list -> (rel, link) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
@@ -38,6 +40,7 @@ type 'typ of_any_kind = [
 
 type 'kind of_any_typ = [
   | `File of ('kind, file) t
+  | `Link of ('kind, link) t
   | `Dir of ('kind, dir) t
 ]
 
@@ -199,6 +202,7 @@ let kind_of
     | Item Dot -> `Rel p
     | Item Dotdot -> `Rel p
     | Item (Link _) -> `Rel p
+    | Item (Broken_link _) -> `Rel p
     | Cons (Root, _) -> `Abs p
     | Cons (Dir _, _) -> `Rel p
     | Cons (Dotdot, _) -> `Rel p
@@ -211,6 +215,7 @@ let rec obj_aux
     match suffix_p with
     | Item (File _) -> `File p
     | Item (Link (_, p')) -> obj_aux p p'
+    | Item (Broken_link _) -> `Link p
     | Item (Dir _) -> `Dir p
     | Item Dot -> `Dir p
     | Item Dotdot -> `Dir p
@@ -246,6 +251,7 @@ and resolve_item : type a b. (a,b) item -> b of_any_kind = fun x ->
   match x with
   | Root -> `Abs (Item x)
   | File _ -> `Rel (Item x)
+  | Broken_link _ -> `Rel (Item x)
   | Dir _ -> `Rel (Item x)
   | Link (_, target) -> resolve_any_kind target
   | Dot -> `Rel (Item x)
@@ -263,6 +269,7 @@ let rec parent : type a b. (a,b) t -> (a,dir) t =
   fun path -> match path with
   | Item Root -> path
   | Item (File _) -> Item Dot
+  | Item (Broken_link _) -> Item Dot
   | Item (Dir _) -> Item Dot
   | Item (Link _) -> Item Dot
   | Item Dot -> Item Dotdot
@@ -307,6 +314,10 @@ and equal_item : type a b c d. (a,b) item -> (c,d) item -> bool =
       | File p, File q -> String.equal p q
       | File _, _ -> false
       | _, File _ -> false
+      | Broken_link (n, t), Broken_link (n', t') ->
+        String.equal n n' && List.equal t t' ~equal:String.equal
+      | Broken_link _, _ -> false
+      | _, Broken_link _ -> false
       | Dir p, Dir q -> String.equal p q
       | Dir _, _ -> false
       | _, Dir _ -> false
@@ -367,6 +378,7 @@ end = struct
     | Root -> "/"
     | Dir x -> x
     | File x -> x
+    | Broken_link (x, _) -> x
     | Link (x,_) -> x
     | Dot -> "."
     | Dotdot -> ".."

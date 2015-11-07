@@ -97,6 +97,21 @@ and exists_item
         let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
         file_exists p_abs' >>= and_check is_directory p_abs' >>| fun dir_exists ->
         seen, dir_exists
+      | Path.Broken_link (_, target) ->
+        let target_does_not_exist target =
+          let target = (target : Path.name list :> string list) in
+          let target_as_str = Filename.of_parts target in
+          file_exists (
+            match target with
+            | "/" :: _ -> target_as_str
+            | _ -> Filename.concat (Path.to_string p_abs) target_as_str
+          )
+        in
+        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
+        file_exists p_abs'
+        >>= and_check is_link p_abs'
+        >>= and_check target_does_not_exist target >>| fun broken_link_exists ->
+        seen, broken_link_exists
       | Path.Link (_, target) ->
         let target_exists seen =
           match Path.kind_of target with

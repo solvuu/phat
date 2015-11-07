@@ -13,9 +13,10 @@
     path is "/", the root directory. The first item in a relative path
     is guaranteed not to be "/".
 
-    - 'typ: is either [file] or [dir] and indicates the type of the
-    file identified by the path. This is a property of the last item
-    in a path. Every non-last item must be a directory.
+    - 'typ: can be [file], [link] or [dir] and indicates the type of
+    file system item identified by the path after symbolic link
+    resolution. This property is held by the last item in a path,
+    while every non-last item must be a directory.
 
     These type parameters restrict operations in sensible ways. For
     example, you can request the items under a directory but not under
@@ -39,7 +40,10 @@
     replaces links by its target. The kind of the path may change in
     the process: a relative path may become absolute after resolution
     (but not vice versa). However, resolving a path will not change
-    the type of the object it identifies.
+    the type of the object it identifies. If a path has the [link]
+    type, then this means it represents a broken link: by convention
+    broken link resolve as themselves, like regular files or
+    directories.
 
     We have defined [equal p q] to mean [p] and [q] are the same after
     normalization, i.e. disregarding [Dot]s and [Dotdot]s that don't
@@ -58,7 +62,7 @@
 
     Windows paths are not supported, but that would be a simple
     extension if anyone requests it.
- *)
+*)
 open Core_kernel.Std
 
 (** User chosen file or directory name. By "user chosen" we mean to
@@ -72,12 +76,14 @@ type rel = [`Rel]
 (** Indicate the type of file, i.e. a regular file or directory. *)
 type file = [`File]
 type dir  = [`Dir]
+type link = [`Link]
 
 type ('kind,'typ) item =
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
   | Link : name * (_,'typ) t -> (rel,'typ) item
+  | Broken_link : name * name list -> (rel, link) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
@@ -92,6 +98,7 @@ type 'typ of_any_kind = [
 
 type 'kind of_any_typ = [
   | `File of ('kind, file) t
+  | `Link of ('kind, link) t
   | `Dir of ('kind, dir) t
 ]
 
