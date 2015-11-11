@@ -78,12 +78,12 @@ type file = [`File]
 type dir  = [`Dir]
 type link = [`Link]
 
-type ('kind,'typ) item =
+type ('kind,'typ) item = private
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
   | Link : name * (_,'typ) t -> (rel,'typ) item
-  | Broken_link : name * name list -> (rel, link) item
+  | Broken_link : name * string list -> (rel, link) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
@@ -102,11 +102,6 @@ type 'kind of_any_typ = [
   | `Dir of ('kind, dir) t
 ]
 
-type any = [
-  | `Abs of abs of_any_typ
-  | `Rel of rel of_any_typ
-]
-
 type abs_file = (abs,file) t [@@deriving sexp]
 type rel_file = (rel,file) t [@@deriving sexp]
 type abs_dir = (abs,dir) t [@@deriving sexp]
@@ -117,6 +112,16 @@ val compare : ('kind,'typ) t -> ('kind,'typ) t -> int
 
 
 (** {2 Constructors} *)
+
+module Item : sig
+  val root : (abs, dir) item
+  val dot : (rel, dir) item
+  val dotdot : (rel, dir) item
+  val file : name -> (rel, file) item
+  val dir : name -> (rel, dir) item
+  val link : name -> (_, 't) t -> [ `Ok of (rel, 't) item | `Broken of (rel, link) item ]
+  val broken_link : name -> string list -> (rel, link) item
+end
 
 (** Unix root directory "/". *)
 val root : abs_dir
@@ -173,10 +178,12 @@ val normalize : ('kind, 'typ) t -> ('kind, 'typ) t
 
 val concat : ('kind, dir) t -> (rel, 'typ) t -> ('kind, 'typ) t
 
+val cons : ('k, dir) t -> (rel, 't) item -> ('k, 't) t
+
 (** Follow all links. Returned value guaranteed not to contain any
     instance of [Link]. *)
-val resolve : (abs, 'typ) t -> abs of_any_typ
+val resolve : (abs, 'typ) t -> (abs, 'typ) t
 
-val resolve_any : ('kind, 'typ) t -> any
+val resolve_any_kind : ('kind, 'typ) t -> 'typ of_any_kind
 
 val parent : ('kind, _) t -> ('kind, dir) t

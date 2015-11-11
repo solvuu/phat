@@ -88,8 +88,7 @@ let rec exists_main
       (seen, r)
     | Cons (Root, p_rel) ->
       file_exists "/" >>= fun r ->
-      and_check2 (fun seen -> exists_rel_path seen (Item Root) p_rel) (seen, r)
-
+      and_check2 (fun seen -> exists_rel_path seen root p_rel) (seen, r)
 
 and exists_item
     : type typ. Cursor_set.t -> Path.abs_dir -> (Path.rel,typ) Path.item -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
@@ -99,16 +98,15 @@ and exists_item
       | Path.Dot -> return (seen, `Yes)
       | Path.Dotdot -> return (seen, `Yes)
       | Path.File _ ->
-        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
+        let p_abs' = Path.to_string (Path.cons p_abs item) in
         file_exists p_abs' >>= and_check is_file p_abs' >>| fun file_exists ->
         seen, file_exists
       | Path.Dir _ ->
-        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
+        let p_abs' = Path.to_string (Path.cons p_abs item) in
         file_exists p_abs' >>= and_check is_directory p_abs' >>| fun dir_exists ->
         seen, dir_exists
       | Path.Broken_link (_, target) ->
         let target_does_not_exist target =
-          let target = (target : Path.name list :> string list) in
           let target_as_str = Filename.of_parts target in
           file_exists (
             match target with
@@ -117,7 +115,7 @@ and exists_item
           )
           >>| negate
         in
-        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
+        let p_abs' = Path.to_string (Path.cons p_abs item) in
         file_exists p_abs'
         >>= and_check is_link p_abs'
         >>= and_check target_does_not_exist target >>| fun broken_link_exists ->
@@ -128,7 +126,7 @@ and exists_item
           | `Abs p -> exists_main seen p
           | `Rel p -> exists_rel_path seen p_abs p
         in
-        let p_abs' = Path.to_string (Path.concat p_abs (Path.Item item)) in
+        let p_abs' = Path.to_string (Path.cons p_abs item) in
         file_exists p_abs' >>= and_check is_link p_abs' >>= fun link_exists ->
         (seen, link_exists) |> and_check2 target_exists
 
@@ -143,7 +141,7 @@ and exists_rel_path
         | Path.Item x -> exists_item seen' p_abs x
         | Path.Cons (x, y) ->
           exists_item seen' p_abs x
-          >>= and_check2 (fun seen -> exists_rel_path seen (Path.concat p_abs (Path.Item x)) y)
+          >>= and_check2 (fun seen -> exists_rel_path seen (Path.cons p_abs x) y)
       )
 
 and exists p =
@@ -201,7 +199,7 @@ and mkdir_aux
           | `Abs dir -> mkdir_main seen' dir
         )
       | Path.Cons (Path.Dir n, p_rel') -> (
-          let p_abs' = Path.concat p_abs (Path.Item (Path.Dir n)) in
+          let p_abs' = Path.cons p_abs (Path.Item.dir n) in
           exists p_abs' >>= (fun x -> match x with
             | `Yes -> return (Ok ())
             | `No | `Unknown -> unix_mkdir p_abs'
@@ -209,7 +207,7 @@ and mkdir_aux
           mkdir_aux seen' p_abs' p_rel'
         )
       | Path.Cons (Path.Link (_, dir) as l, p_rel') -> (
-          unix_symlink (Path.concat p_abs (Path.Item l)) ~targets:dir >>=? fun () ->
+          unix_symlink (Path.cons p_abs l) ~targets:dir >>=? fun () ->
           match Path.kind_of dir with
           | `Rel dir ->
             mkdir_aux seen' p_abs (Path.concat dir p_rel')
@@ -228,7 +226,7 @@ let rec find_item item path =
   match path with
   | [] -> return None
   | dir::path ->
-     let x = Path.concat dir (Path.Item item) in
+     let x = Path.cons dir item in
      exists x >>= function
      | `Yes -> return (Some x)
      | `Unknown | `No -> find_item item path

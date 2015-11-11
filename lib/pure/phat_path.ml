@@ -23,7 +23,7 @@ type ('kind,'typ) item =
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
   | Link : name * (_,'typ) t -> (rel,'typ) item
-  | Broken_link : name * name list -> (rel, link) item
+  | Broken_link : name * string list -> (rel, link) item
   | Dot : (rel,dir) item
   | Dotdot : (rel,dir) item
 
@@ -42,11 +42,6 @@ type 'kind of_any_typ = [
   | `File of ('kind, file) t
   | `Link of ('kind, link) t
   | `Dir of ('kind, dir) t
-]
-
-type any = [
-  | `Abs of abs of_any_typ
-  | `Rel of rel of_any_typ
 ]
 
 type abs_file = (abs,file) t [@@deriving sexp_of]
@@ -231,7 +226,6 @@ let typ_of
   : type k. (k, _) t -> k of_any_typ
   = fun p -> obj_aux p p
 
-
 (******************************************************************************)
 (* Operators                                                                  *)
 (******************************************************************************)
@@ -243,79 +237,32 @@ let rec concat
     | Item x -> Cons (x,y)
     | Cons (x1,x2) -> Cons (x1, concat x2 y)
 
-module Resolve = struct
-  type ('a, 'b) path = ('a, 'b) t
-
-  module Arg = struct
-    type t = P : _ path -> t
-    let make p = P p
-    let compare = compare
-    let t_of_sexp _ = assert false
-    let sexp_of_t _ = assert false
-  end
-
-  module Set = struct
-    include Set.Make(Arg)
-    let add set p = add set (Arg.make p)
-    let mem set p = mem set (Arg.make p)
-  end
-
-  exception Infinite_loop
-
-  let rec resolve
-    :  _ t -> any =
-    fun p -> resolve_main Set.empty p
-
-  and resolve_main
-    : type k typ. Set.t -> (k, typ) path -> any
-    = fun stack p ->
-      if Set.mem stack p then raise Infinite_loop ;
-      let stack' = Set.add stack p in
-      match p with
-      | Item x -> resolve_item stack' x
-      | Cons (item, path) ->
-        match resolve_item stack' item,
-              resolve_main stack' path
-        with
-        | `Rel (`Dir x), `Rel (`Dir y) -> `Rel (`Dir (concat x y))
-        | `Rel (`Dir x), `Rel (`File y) -> `Rel (`File (concat x y))
-        | `Rel (`Dir x), `Rel (`Link y) -> `Rel (`Link (concat x y))
-        | `Abs (`Dir x), `Rel (`Dir y) -> `Abs (`Dir (concat x y))
-        | `Abs (`Dir x), `Rel (`File y) -> `Abs (`File (concat x y))
-        | `Abs (`Dir x), `Rel (`Link y) -> `Abs (`Link (concat x y))
-        | `Abs (`Link _) as any_p, _ -> any_p (* item is a broken link *)
-        | `Rel (`Link _) as any_p, _ -> any_p (* item is a broken link *)
-        | `Abs (`File _), _ -> assert false (* cannot happen, but not enforced by type system *)
-        | `Rel (`File _), _ -> assert false (* cannot happen, but not enforced by type system *)
-        | _, `Abs y -> `Abs y
-
-  and resolve_item
-    : type k typ. Set.t -> (k, typ) item -> any
-    = fun stack x ->
-      match x with
-      | Root -> `Abs (`Dir (Item x))
-      | File _ -> `Rel (`File (Item x))
-      | Dir _ -> `Rel (`Dir (Item x))
-      | Broken_link _ -> `Rel (`Link (Item x))
-      | Link (n, target) -> (
-          try resolve_main stack target
-          with Infinite_loop -> `Rel (`Link (Item (Broken_link (n, []))))
-        )
-      | Dot -> `Rel (`Dir (Item x))
-      | Dotdot -> `Rel (`Dir (Item x))
-end
-
-let resolve_any = Resolve.resolve
-
-let resolve : type b. (abs,b) t -> abs of_any_typ =
+let rec resolve_any_kind : type a b. (a,b) t -> b of_any_kind =
   function
-  | Item Root as x -> `Dir x
+  | Item x -> resolve_item x
+  | Cons (item, path) ->
+    match resolve_item item, resolve_any_kind path with
+    | `Rel x, `Rel y -> `Rel (concat x y)
+    | _, `Abs y -> `Abs y
+    | `Abs x, `Rel y -> `Abs (concat x y)
+
+and resolve_item : type a b. (a,b) item -> b of_any_kind = fun x ->
+  match x with
+  | Root -> `Abs (Item x)
+  | File _ -> `Rel (Item x)
+  | Broken_link _ -> `Rel (Item x)
+  | Dir _ -> `Rel (Item x)
+  | Link (_, target) -> resolve_any_kind target
+  | Dot -> `Rel (Item x)
+  | Dotdot -> `Rel (Item x)
+
+and resolve : type b. (abs,b) t -> (abs,b) t =
+  function
+  | Item Root as x -> x
   | Cons (Root as x, path) ->
-    match resolve_any path with
+    match resolve_any_kind path with
     | `Abs y -> y
-    | `Rel (`Dir y) -> `Dir (Cons (x, y))
-    | `Rel (`File y) -> `File (Cons (x, y))
-    | `Rel (`Link y) -> `Link (Cons (x, y))
+    | `Rel y -> Cons (x, y)
 
 let rec parent : type a b. (a,b) t -> (a,dir) t =
   fun path -> match path with
@@ -384,6 +331,7 @@ module Elem : sig
   val elems : string -> elems Or_error.t
 
   val item_to_elem : (_,_) item -> elem
+  val path_to_elems : _ t -> elems
 
   val rel_dir_of_elems : elems -> rel_dir Or_error.t
   val abs_dir_of_elems : elems -> abs_dir Or_error.t
@@ -418,6 +366,10 @@ end = struct
     | Link (x,_) -> x
     | Dot -> "."
     | Dotdot -> ".."
+
+  let rec path_to_elems : type a b . (a,b) t -> elems = function
+    | Item i -> [ item_to_elem i ]
+    | Cons (x, y) -> (item_to_elem x) :: (path_to_elems y)
 
   let rel_dir_of_elems elems : rel_dir Or_error.t =
     match elems with
@@ -509,7 +461,69 @@ open Elem
 (******************************************************************************)
 (* Constructors                                                               *)
 (******************************************************************************)
+
+module Link = struct
+  type ('a, 'b) path = ('a, 'b) t
+
+  module Arg = struct
+    type t = P : _ path -> t
+    let make p = P p
+    let compare = Pervasives.compare
+    let t_of_sexp _ = assert false
+    let sexp_of_t _ = assert false
+  end
+
+  module Set = struct
+    include Set.Make(Arg)
+    let add set p = add set (Arg.make p)
+    let mem set p = mem set (Arg.make p)
+  end
+
+  let rec is_cyclic
+    :  _ t -> bool =
+    fun p -> is_cyclic_main Set.empty p
+
+  and is_cyclic_main
+    : type k typ. Set.t -> (k, typ) path -> bool
+    = fun stack p ->
+      if Set.mem stack p then true
+      else
+        let stack' = Set.add stack p in
+        match p with
+        | Item x -> is_cyclic_item stack' x
+        | Cons (item, path) ->
+          is_cyclic_item stack' item || is_cyclic_main stack' path
+
+  and is_cyclic_item
+    : type k typ. Set.t -> (k, typ) item -> bool
+    = fun stack x ->
+      match x with
+      | Link (_, target) -> is_cyclic_main stack target
+      | _ -> false
+end
+
+module Item = struct
+  let root = Root
+  let dot = Dot
+  let dotdot = Dotdot
+
+  let file n = File n
+  let dir n = Dir n
+
+  let link n p =
+    let l = Link (n, p) in
+    if Link.is_cyclic (Item l) then
+      `Broken (Broken_link (n, (Elem.path_to_elems p :> string list)))
+    else
+      `Ok l
+
+  let broken_link n l = Broken_link (n, l)
+end
+
 let root = Item Root
+
+let cons x y = concat x (Item y)
+
 let rel_dir s = elems s >>= rel_dir_of_elems
 let abs_dir s = elems s >>= abs_dir_of_elems
 let rel_file s = elems s >>= rel_file_of_elems
