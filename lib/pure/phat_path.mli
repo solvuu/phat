@@ -102,6 +102,11 @@ type 'kind of_any_typ = [
   | `Dir of ('kind, dir) t
 ]
 
+type any = [
+  | `Abs of abs of_any_typ
+  | `Rel of rel of_any_typ
+]
+
 type abs_file = (abs,file) t [@@deriving sexp]
 type rel_file = (rel,file) t [@@deriving sexp]
 type abs_dir = (abs,dir) t [@@deriving sexp]
@@ -170,8 +175,8 @@ val concat : ('kind, dir) t -> (rel, 'typ) t -> ('kind, 'typ) t
 
 (** Follow all links. Returned value guaranteed not to contain any
     instance of [Link]. *)
-val resolve : (abs, 'typ) t -> (abs, 'typ) t
+val resolve : (abs, 'typ) t -> abs of_any_typ
 
-val resolve_any_kind : ('kind, 'typ) t -> 'typ of_any_kind
+val resolve_any : ('kind, 'typ) t -> any
 
 val parent : ('kind, _) t -> ('kind, dir) t

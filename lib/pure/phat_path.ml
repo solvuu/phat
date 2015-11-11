@@ -44,6 +44,11 @@ type 'kind of_any_typ = [
   | `Dir of ('kind, dir) t
 ]
 
+type any = [
+  | `Abs of abs of_any_typ
+  | `Rel of rel of_any_typ
+]
+
 type abs_file = (abs,file) t [@@deriving sexp_of]
 type rel_file = (rel,file) t [@@deriving sexp_of]
 type abs_dir = (abs,dir) t [@@deriving sexp_of]
@@ -238,32 +243,79 @@ let rec concat
     | Item x -> Cons (x,y)
     | Cons (x1,x2) -> Cons (x1, concat x2 y)
 
-let rec resolve_any_kind : type a b. (a,b) t -> b of_any_kind =
-  function
-  | Item x -> resolve_item x
-  | Cons (item, path) ->
-    match resolve_item item, resolve_any_kind path with
-    | `Rel x, `Rel y -> `Rel (concat x y)
-    | _, `Abs y -> `Abs y
-    | `Abs x, `Rel y -> `Abs (concat x y)
+module Resolve = struct
+  type ('a, 'b) path = ('a, 'b) t
 
-and resolve_item : type a b. (a,b) item -> b of_any_kind = fun x ->
-  match x with
-  | Root -> `Abs (Item x)
-  | File _ -> `Rel (Item x)
-  | Broken_link _ -> `Rel (Item x)
-  | Dir _ -> `Rel (Item x)
-  | Link (_, target) -> resolve_any_kind target
-  | Dot -> `Rel (Item x)
-  | Dotdot -> `Rel (Item x)
+  module Arg = struct
+    type t = P : _ path -> t
+    let make p = P p
+    let compare = compare
+    let t_of_sexp _ = assert false
+    let sexp_of_t _ = assert false
+  end
 
-and resolve : type b. (abs,b) t -> (abs,b) t =
+  module Set = struct
+    include Set.Make(Arg)
+    let add set p = add set (Arg.make p)
+    let mem set p = mem set (Arg.make p)
+  end
+
+  exception Infinite_loop
+
+  let rec resolve
+    :  _ t -> any =
+    fun p -> resolve_main Set.empty p
+
+  and resolve_main
+    : type k typ. Set.t -> (k, typ) path -> any
+    = fun stack p ->
+      if Set.mem stack p then raise Infinite_loop ;
+      let stack' = Set.add stack p in
+      match p with
+      | Item x -> resolve_item stack' x
+      | Cons (item, path) ->
+        match resolve_item stack' item,
+              resolve_main stack' path
+        with
+        | `Rel (`Dir x), `Rel (`Dir y) -> `Rel (`Dir (concat x y))
+        | `Rel (`Dir x), `Rel (`File y) -> `Rel (`File (concat x y))
+        | `Rel (`Dir x), `Rel (`Link y) -> `Rel (`Link (concat x y))
+        | `Abs (`Dir x), `Rel (`Dir y) -> `Abs (`Dir (concat x y))
+        | `Abs (`Dir x), `Rel (`File y) -> `Abs (`File (concat x y))
+        | `Abs (`Dir x), `Rel (`Link y) -> `Abs (`Link (concat x y))
+        | `Abs (`Link _) as any_p, _ -> any_p (* item is a broken link *)
+        | `Rel (`Link _) as any_p, _ -> any_p (* item is a broken link *)
+        | `Abs (`File _), _ -> assert false (* cannot happen, but not enforced by type system *)
+        | `Rel (`File _), _ -> assert false (* cannot happen, but not enforced by type system *)
+        | _, `Abs y -> `Abs y
+
+  and resolve_item
+    : type k typ. Set.t -> (k, typ) item -> any
+    = fun stack x ->
+      match x with
+      | Root -> `Abs (`Dir (Item x))
+      | File _ -> `Rel (`File (Item x))
+      | Dir _ -> `Rel (`Dir (Item x))
+      | Broken_link _ -> `Rel (`Link (Item x))
+      | Link (n, target) -> (
+          try resolve_main stack target
+          with Infinite_loop -> `Rel (`Link (Item (Broken_link (n, []))))
+        )
+      | Dot -> `Rel (`Dir (Item x))
+      | Dotdot -> `Rel (`Dir (Item x))
+end
+
+let resolve_any = Resolve.resolve
+
+let resolve : type b. (abs,b) t -> abs of_any_typ =
   function
-  | Item Root as x -> x
+  | Item Root as x -> `Dir x
   | Cons (Root as x, path) ->
-    match resolve_any_kind path with
+    match resolve_any path with
     | `Abs y -> y
-    | `Rel y -> Cons (x, y)
+    | `Rel (`Dir y) -> `Dir (Cons (x, y))
+    | `Rel (`File y) -> `File (Cons (x, y))
+    | `Rel (`Link y) -> `Link (Cons (x, y))
 
 let rec parent : type a b. (a,b) t -> (a,dir) t =
   fun path -> match path with
