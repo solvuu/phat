@@ -134,6 +134,9 @@ val rel_file : string -> rel_file Or_error.t
 (** Parse an absolute or relative file path. *)
 val file_of_any_kind : string -> file of_any_kind Or_error.t
 
+(** Parse an absolute or relative dir path. *)
+val dir_of_any_kind : string -> dir of_any_kind Or_error.t
+
 
 (** {2 Deconstructors} *)
 

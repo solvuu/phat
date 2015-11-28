@@ -487,6 +487,14 @@ let file_of_any_kind s =
     | Ok x -> Ok (`Abs x)
     | Error e2 -> Error (Error.of_list [e1;e2])
 
+let dir_of_any_kind s =
+  match rel_dir s with
+  | Ok x -> Ok (`Rel x)
+  | Error e1 ->
+    match abs_dir s with
+    | Ok x -> Ok (`Abs x)
+    | Error e2 -> Error (Error.of_list [e1;e2])
+
 
 (******************************************************************************)
 (* Deconstructors                                                             *)
