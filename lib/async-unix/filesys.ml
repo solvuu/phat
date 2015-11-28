@@ -233,7 +233,7 @@ let rec find_item item path =
 
 
 let rec fold_aux p_abs p_rel obj ~f ~init =
-  let dir = Path.concat p_abs p_rel in
+  let dir = Path.(concat p_abs p_rel |> normalize) in
   match obj with
   | `File file -> f init (`File (Path.cons p_rel file))
   | `Broken_link bl ->  f init (`Broken_link (Path.cons p_rel bl))
@@ -256,15 +256,16 @@ let rec fold_aux p_abs p_rel obj ~f ~init =
             return (`Dir (Path.Item.dir n))
 
           | `Link ->
-            reify_link n subdir_as_str
+            reify_link subdir_as_str n
         )
         >>= fun item ->
         fold_aux p_abs (Path.cons p_rel subdir_item) item ~f ~init:accu
       )
 
-and reify_link n p_as_str =
-  Unix.readlink p_as_str >>= fun target ->
-  try_with Unix.(fun () -> stat p_as_str) >>| function
+and reify_link dir_as_str n =
+  let link_as_str = Filename.concat dir_as_str (n : Path.name :> string) in
+  Unix.readlink link_as_str >>= fun target ->
+  try_with Unix.(fun () -> stat link_as_str) >>| function
   | Ok stats -> (
       let make_link f cons =
         match f target with (* parse target of the link *)

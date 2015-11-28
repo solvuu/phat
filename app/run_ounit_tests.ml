@@ -303,6 +303,33 @@ let filesys_mkdir ctx =
     Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
   )
 
+let fold_works_on_test_directory ctx =
+  let expected = [
+    "(Cons Dot(Item Dot))" ;
+    "(Cons Dot(Cons Dot(Item(Broken_link broken(foo bar booz)))))" ;
+    "(Cons Dot(Cons Dot(Item(Dir foo))))" ;
+    "(Cons Dot(Cons Dot(Cons(Dir foo)(Item(Dir bar)))))" ;
+    "(Cons Dot(Cons Dot(Cons(Dir foo)(Cons(Dir bar)(Item(File baz))))))" ;
+    "(Cons Dot(Cons Dot(Item(Link qux(Cons(Dir foo)(Cons(Dir bar)(Item(File baz))))))))" ;
+  ]
+  in
+  let tmpdir_as_str = OUnit2.bracket_tmpdir ctx in
+  let tmpdir = ok_exn (Phat.abs_dir tmpdir_as_str) in
+  let str_of_elt =
+    let f x = Sexp.to_string (Phat.sexp_of_t x) in
+    function
+    | `File file -> f file
+    | `Dir d -> f d
+    | `Broken_link bl -> f bl
+  in
+  create_test_directory tmpdir_as_str >>= fun () ->
+  Phat.fold tmpdir ~init:[] ~f:(fun accu elt ->
+      return ((str_of_elt elt) :: accu)
+    )
+  >>| function
+  | Ok l -> assert_equal ~printer:(List.to_string ~f:ident) expected (List.rev l)
+  | Error _ -> assert_failure "Fold failed on test directory"
+
 (* let filesys_mkdir_cycles ctx = *)
 (*   let tmpdir = OUnit2.bracket_tmpdir ctx in *)
 (*   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in *)
@@ -334,6 +361,7 @@ let suite = "Phat test suite" >::: [
     "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ;
     "Exists test" >::= filesys_exists ;
     "Create dir paths" >::= filesys_mkdir ;
+    "Fold works on test dir" >::= fold_works_on_test_directory ;
     (* "Create dirs with cycles" >::= filesys_mkdir_cycles ; *)
   ]
 
