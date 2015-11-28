@@ -83,8 +83,13 @@ let rec exists_main
   =
   let open Path in
   fun seen -> function
-    | Item Root -> return (seen, `Yes)
-    | Cons (Root, p_rel) -> exists_rel_path seen (Item Root) p_rel
+    | Item Root ->
+      file_exists "/" >>| fun r ->
+      (seen, r)
+    | Cons (Root, p_rel) ->
+      file_exists "/" >>= fun r ->
+      and_check2 (fun seen -> exists_rel_path seen (Item Root) p_rel) (seen, r)
+
 
 and exists_item
     : type typ. Cursor_set.t -> Path.abs_dir -> (Path.rel,typ) Path.item -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
