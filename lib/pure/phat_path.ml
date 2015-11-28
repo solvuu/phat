@@ -278,11 +278,12 @@ let rec parent : type a b. (a,b) t -> (a,dir) t =
 
 let rec normalize : type a b. (a,b) t -> (a,b) t =
   fun path -> match path with
-    | Item _ -> path
+    | Item i -> Item (normalize_item i)
     | Cons (dir, path_tail) ->
+      let dir_norm = normalize_item dir in
       let path_tail_norm = normalize path_tail in
-      match dir, path_tail_norm with
-      | _, Item Dot -> Item dir
+      match dir_norm, path_tail_norm with
+      | _, Item Dot -> Item dir_norm
       | Dot, _ -> path_tail_norm
       | Root, Item Dotdot -> Item Root
       | Root, Cons (Dotdot, path') -> normalize (Cons (Root, path'))
@@ -292,8 +293,19 @@ let rec normalize : type a b. (a,b) t -> (a,b) t =
       | Dir _, Cons (Dotdot, path') -> path'
       | Link _, Item Dotdot -> Item Dot
       | Link _, Cons (Dotdot, path') -> path'
-      | _, _ -> Cons (dir, path_tail_norm)
+      | _, _ -> Cons (dir_norm, path_tail_norm)
 
+and normalize_item
+  : type a b. (a,b) item -> (a,b) item
+  = fun item ->
+    match item with
+    | File _ -> item
+    | Dir _ -> item
+    | Dot -> item
+    | Dotdot -> item
+    | Root -> item
+    | Broken_link _ -> item
+    | Link (n, p) -> Link (n, normalize p)
 
 let rec equal
   : type a b c d. (a,b) t -> (c,d) t -> bool
