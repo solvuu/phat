@@ -278,11 +278,12 @@ let rec parent : type a b. (a,b) t -> (a,dir) t =
 
 let rec normalize : type a b. (a,b) t -> (a,b) t =
   fun path -> match path with
-    | Item _ -> path
+    | Item i -> Item (normalize_item i)
     | Cons (dir, path_tail) ->
+      let dir_norm = normalize_item dir in
       let path_tail_norm = normalize path_tail in
-      match dir, path_tail_norm with
-      | _, Item Dot -> Item dir
+      match dir_norm, path_tail_norm with
+      | _, Item Dot -> Item dir_norm
       | Dot, _ -> path_tail_norm
       | Root, Item Dotdot -> Item Root
       | Root, Cons (Dotdot, path') -> normalize (Cons (Root, path'))
@@ -292,44 +293,27 @@ let rec normalize : type a b. (a,b) t -> (a,b) t =
       | Dir _, Cons (Dotdot, path') -> path'
       | Link _, Item Dotdot -> Item Dot
       | Link _, Cons (Dotdot, path') -> path'
-      | _, _ -> Cons (dir, path_tail_norm)
+      | _, _ -> Cons (dir_norm, path_tail_norm)
 
+and normalize_item
+  : type a b. (a,b) item -> (a,b) item
+  = fun item ->
+    match item with
+    | File _ -> item
+    | Dir _ -> item
+    | Dot -> item
+    | Dotdot -> item
+    | Root -> item
+    | Broken_link _ -> item
+    | Link (n, p) -> Link (n, normalize p)
 
-let rec equal
-  : type a b c d. (a,b) t -> (c,d) t -> bool
-  = fun p q -> equal_normalized (normalize p) (normalize q)
+let equal
+  : type a b. (a,b) t -> (a,b) t -> bool
+  = fun p q -> normalize p = normalize q
 
-and equal_normalized : type a b c d. (a,b) t -> (c,d) t -> bool =
-    fun p q -> match p,q with
-    | Item p, Item q -> equal_item p q
-    | Cons(p_dir,p_path), Cons(q_dir,q_path) ->
-      (equal_item p_dir q_dir) && (equal_normalized p_path q_path)
-    | _, _ -> false
-
-and equal_item : type a b c d. (a,b) item -> (c,d) item -> bool =
-    fun p q -> match p,q with
-      | Root, Root -> true
-      | Root, _ -> false
-      | _, Root -> false
-      | File p, File q -> String.equal p q
-      | File _, _ -> false
-      | _, File _ -> false
-      | Broken_link (n, t), Broken_link (n', t') ->
-        String.equal n n' && List.equal t t' ~equal:String.equal
-      | Broken_link _, _ -> false
-      | _, Broken_link _ -> false
-      | Dir p, Dir q -> String.equal p q
-      | Dir _, _ -> false
-      | _, Dir _ -> false
-      | Link (np, p'), Link (nq, q') ->
-        String.equal np nq && equal p' q'
-      | Link _, _ -> false
-      | _, Link _ -> false
-      | Dot, Dot -> true
-      | Dot, _ -> false
-      | _, Dot -> false
-      | Dotdot, Dotdot -> true
-
+let compare
+  : type a b. (a,b) t -> (a,b) t -> int
+  = fun p q -> compare (normalize p) (normalize q)
 
 (******************************************************************************)
 (* Elems - internal use only                                             *)

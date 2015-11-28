@@ -10,6 +10,8 @@ let (>::=) test_name (f : test_ctxt -> unit Deferred.t) : test =
     Thread_safe.block_on_async_exn (fun () -> f test_ctxt)
   )
 
+let string_of_path x = Sexp.to_string (Phat.sexp_of_t x)
+
 let new_name =
   let k = ref (- 1) in
   fun () ->
@@ -132,8 +134,8 @@ let normalization _ =
     let msg =
       sprintf
         "Path %s was normalized into %s which is not normalized"
-        (Phat.to_string p)
-        (Phat.to_string p_norm)
+        (string_of_path p)
+        (string_of_path p_norm)
     in
     assert_bool msg (Phat.is_normalized p_norm)
   in
@@ -150,9 +152,9 @@ let normalization_is_idempotent _ =
     let msg =
       sprintf
         "Path %s was normalized into %s which was normalized into %s"
-        (Phat.to_string p)
-        (Phat.to_string p_norm)
-        (Phat.to_string p_norm_norm)
+        (string_of_path p)
+        (string_of_path p_norm)
+        (string_of_path p_norm_norm)
     in
     assert_bool msg (p_norm = p_norm_norm)
   in
