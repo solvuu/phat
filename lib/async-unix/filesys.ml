@@ -232,33 +232,37 @@ let rec find_item item path =
      | `Unknown | `No -> find_item item path
 
 
-let rec fold_aux start ~f ~init =
-  match start with
-  | `File _ as file -> f init file
-  | `Broken_link _ as bl ->  f init bl
-  | `Dir p as dir ->
-    let p_as_str = Path.to_string p in
-    f init dir >>= fun accu -> (* prefix traversal *)
-    Sys.readdir p_as_str >>= fun dir_contents ->
+let rec fold_aux p_abs p_rel obj ~f ~init =
+  let dir = Path.concat p_abs p_rel in
+  match obj with
+  | `File file -> f init (`File (Path.cons p_rel file))
+  | `Broken_link bl ->  f init (`Broken_link (Path.cons p_rel bl))
+  | `Dir subdir_item ->
+    let subdir_rel = Path.cons p_rel subdir_item in
+    let subdir = Path.cons dir subdir_item in
+    let subdir_as_str = Path.to_string subdir in
+    f init (`Dir subdir_rel) >>= fun accu -> (* prefix traversal *)
+    Sys.readdir subdir_as_str >>= fun dir_contents ->
     Deferred.Array.fold dir_contents ~init:accu ~f:(fun accu obj ->
-        let p_obj_as_str = Filename.concat p_as_str obj in
+        let obj_as_str = Filename.concat subdir_as_str obj in
         let n = Path.name_exn obj in
-        Unix.(lstat p_obj_as_str) >>= fun stats ->
+        Unix.(lstat obj_as_str) >>= fun stats ->
         (
           match stats.Unix.Stats.kind with
           | `File | `Block | `Char | `Fifo | `Socket ->
-            return (`File (Path.cons p (Path.Item.file n)))
+            return (`File (Path.Item.file n))
 
           | `Directory ->
-            return (`Dir (Path.cons p (Path.Item.dir n)))
+            return (`Dir (Path.Item.dir n))
 
           | `Link ->
-            reify_link n p p_as_str
+            reify_link n subdir_as_str
         )
-        >>= fun link -> fold_aux link ~f ~init:accu
+        >>= fun item ->
+        fold_aux p_abs (Path.cons p_rel subdir_item) item ~f ~init:accu
       )
 
-and reify_link n p p_as_str =
+and reify_link n p_as_str =
   Unix.readlink p_as_str >>= fun target ->
   try_with Unix.(fun () -> stat p_as_str) >>| function
   | Ok stats -> (
@@ -267,7 +271,7 @@ and reify_link n p p_as_str =
         | Ok target ->
           Path.map_any_kind target { Path.map = fun x ->
               match Path.Item.link n x with
-              | `Ok x -> cons (Path.cons p x)
+              | `Ok x -> cons x
               | `Broken _ -> assert false
             }
         | Error _ ->
@@ -289,12 +293,12 @@ and reify_link n p p_as_str =
     )
   | Error _ ->
     let bl = Path.Item.broken_link n (String.split ~on:'/' target) in
-    `Broken_link (Path.cons p bl)
+    `Broken_link bl
 
 let fold start ~f ~init =
   exists start >>= function
   | `Yes ->
-    fold_aux (`Dir start) ~f ~init >>| fun r ->
+    fold_aux start Path.(Item (Item.dot)) (`Dir Path.Item.dot) ~f ~init >>| fun r ->
     Ok r
 
   | `No | `Unknown ->

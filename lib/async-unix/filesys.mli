@@ -19,8 +19,8 @@ val find_item
 
 val fold :
   (abs, dir) t ->
-  f:('a -> [ `File of (abs, file) t
-           | `Dir of (abs, dir) t
-           | `Broken_link of (abs, link) t ] -> 'a Deferred.t) ->
+  f:('a -> [ `File of (rel, file) t
+           | `Dir of (rel, dir) t
+           | `Broken_link of (rel, link) t ] -> 'a Deferred.t) ->
   init:'a ->
   'a Deferred.Or_error.t
