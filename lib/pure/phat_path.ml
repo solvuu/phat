@@ -311,6 +311,9 @@ let equal
   : type a b. (a,b) t -> (a,b) t -> bool
   = fun p q -> normalize p = normalize q
 
+let compare
+  : type a b. (a,b) t -> (a,b) t -> int
+  = fun p q -> compare (normalize p) (normalize q)
 
 (******************************************************************************)
 (* Elems - internal use only                                             *)

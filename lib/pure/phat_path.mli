@@ -108,6 +108,7 @@ type abs_dir = (abs,dir) t [@@deriving sexp]
 type rel_dir = (rel,dir) t [@@deriving sexp]
 
 val equal : ('kind,'typ) t -> ('kind,'typ) t -> bool
+val compare : ('kind,'typ) t -> ('kind,'typ) t -> int
 
 
 (** {2 Constructors} *)
