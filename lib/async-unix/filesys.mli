@@ -16,3 +16,11 @@ val find_item
   :  (rel,'typ) item
   -> abs_dir list
   -> (abs,'typ) t option Deferred.t
+
+val fold :
+  (abs, dir) t ->
+  f:('a -> [ `File of (abs, file) t
+           | `Dir of (abs, dir) t
+           | `Broken_link of (abs, link) t ] -> 'a Deferred.t) ->
+  init:'a ->
+  'a Deferred.Or_error.t

@@ -230,3 +230,73 @@ let rec find_item item path =
      exists x >>= function
      | `Yes -> return (Some x)
      | `Unknown | `No -> find_item item path
+
+
+let rec fold_aux start ~f ~init =
+  match start with
+  | `File _ as file -> f init file
+  | `Broken_link _ as bl ->  f init bl
+  | `Dir p as dir ->
+    let p_as_str = Path.to_string p in
+    f init dir >>= fun accu -> (* prefix traversal *)
+    Sys.readdir p_as_str >>= fun dir_contents ->
+    Deferred.Array.fold dir_contents ~init:accu ~f:(fun accu obj ->
+        let p_obj_as_str = Filename.concat p_as_str obj in
+        let n = Path.name_exn obj in
+        Unix.(lstat p_obj_as_str) >>= fun stats ->
+        (
+          match stats.Unix.Stats.kind with
+          | `File | `Block | `Char | `Fifo | `Socket ->
+            return (`File (Path.cons p (Path.Item.file n)))
+
+          | `Directory ->
+            return (`Dir (Path.cons p (Path.Item.dir n)))
+
+          | `Link ->
+            reify_link n p p_as_str
+        )
+        >>= fun link -> fold_aux link ~f ~init:accu
+      )
+
+and reify_link n p p_as_str =
+  Unix.readlink p_as_str >>= fun target ->
+  try_with Unix.(fun () -> stat p_as_str) >>| function
+  | Ok stats -> (
+      let make_link f cons =
+        match f target with (* parse target of the link *)
+        | Ok target ->
+          Path.map_any_kind target { Path.map = fun x ->
+              match Path.Item.link n x with
+              | `Ok x -> cons (Path.cons p x)
+              | `Broken _ -> assert false
+            }
+        | Error _ ->
+          (* should not happen since the target exists
+                       according to the file system *)
+          assert false
+      in
+      match stats.Unix.Stats.kind with
+      | `File | `Block | `Char | `Fifo | `Socket ->
+        make_link Path.file_of_any_kind (fun x -> `File x)
+
+      | `Directory ->
+        make_link Path.dir_of_any_kind (fun x -> `Dir x)
+
+      | `Link ->
+        (* should not happen: Unix.stat resolves to a
+                     link-free path *)
+        assert false
+    )
+  | Error _ ->
+    let bl = Path.Item.broken_link n (String.split ~on:'/' target) in
+    `Broken_link (Path.cons p bl)
+
+let fold start ~f ~init =
+  exists start >>= function
+  | `Yes ->
+    fold_aux (`Dir start) ~f ~init >>| fun r ->
+    Ok r
+
+  | `No | `Unknown ->
+    errorh _here_ "Directory does not exist" () sexp_of_unit
+    |> return
