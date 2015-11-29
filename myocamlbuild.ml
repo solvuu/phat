@@ -3,6 +3,10 @@ let version = "dev"
 open Printf
 open Ocamlbuild_plugin
 
+let () =
+  Options.use_ocamlfind := true
+
+
 let git_commit =
   if Sys.file_exists ".git" then
     let git_output = Ocamlbuild_pack.My_unix.run_and_read "git rev-parse HEAD" in
