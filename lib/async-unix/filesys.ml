@@ -9,12 +9,6 @@ let and_check f x e =
   | `No -> return `No
   | `Unknown -> return `Unknown
 
-let and_check2 f (seen, e) =
-  match e with
-  | `Yes -> f seen
-  | `No -> return (seen, `No)
-  | `Unknown -> return (seen, `Unknown)
-
 let negate = function
   | `Yes -> `No
   | `No -> `Yes
@@ -41,42 +35,6 @@ let is_link p =
       `Yes
     | `File | `Directory | `Char | `Block | `Fifo | `Socket ->
       `No
-
-
-(* Represents a position in a path. This is useful when building or
-   checking a path, which is a step by step operation: each step is
-   performed by a recursive call on a (p_abs, p_rel) pair, with the
-   invariant that:
-   - the path that we want to build/check is concat p_abs p_rel
-   - p_abs has already been built/checked
-   - p_abs is resolved
-
-   In general, we'd like to avoid calling the recursive function twice
-   with the same arguments (to avoid duplicating work on shared
-   subtrees, or to be cycle-tolerant) and so the build/check function
-   will generally carry a set of cursors to remember which calls have
-   already been made.
- *)
-module Path_cursor : sig
-  type t
-  val make : (_,_) Path.t -> (_,_) Path.t -> t
-  val compare : t -> t -> int
-  val t_of_sexp : Sexp.t -> t
-  val sexp_of_t : t -> Sexp.t
-end
-= struct
-  type t = P : (_,_) Path.t * (_,_) Path.t -> t
-  let make p q = P (p, q)
-  let compare = compare
-  let t_of_sexp _ = assert false
-  let sexp_of_t _ = assert false
-end
-
-module Cursor_set = struct
-  include Set.Make(Path_cursor)
-  let add set p q = add set (Path_cursor.make p q)
-  let mem set p q = mem set (Path_cursor.make p q)
-end
 
 let rec exists
   : type typ. (Path.abs, typ) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
