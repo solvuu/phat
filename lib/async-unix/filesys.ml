@@ -232,6 +232,109 @@ let rec find_item item path =
      | `Unknown | `No -> find_item item path
 
 
+let rec reify
+  : type o.
+    (Path.abs, o) Path.t ->
+    (Path.abs, o) Path.t Deferred.Or_error.t
+  = fun p ->
+    exists p >>= function
+    | `No | `Unknown ->
+      Deferred.Or_error.errorf "No such file or directory %s" (Path.to_string p)
+    | `Yes ->
+      match Path.normalize p with
+      | Path.Item Path.Root -> Deferred.Or_error.return p
+      | Path.Cons (Path.Root, p_rel) ->
+        reify_aux Path.root p_rel
+
+and reify_aux
+  : type o.
+    (Path.abs, Path.dir) Path.t ->
+    (Path.rel, o) Path.t ->
+    (Path.abs, o) Path.t Deferred.Or_error.t
+  = fun p_abs p_rel ->
+  match p_rel with
+  | Path.Item i ->
+    reify_aux_item p_abs i
+  | Path.Cons (h, t) ->
+    reify_aux_item p_abs h >>=? fun p_abs' ->
+    reify_aux p_abs' t
+
+and reify_aux_item
+  : type o.
+    (Path.abs, Path.dir) Path.t ->
+    (Path.rel, o) Path.item ->
+    (Path.abs, o) Path.t Deferred.Or_error.t
+  = fun p_abs item ->
+    let p = Path.cons p_abs item in
+    let p_str = Path.to_string p in
+    match item with
+    | Path.File n -> (
+        is_link p_str >>= function
+        | `Yes -> reify_link Path.file_of_any_kind p_abs n p_str
+        | `No ->  Deferred.Or_error.return p
+        | `Unknown -> assert false (* [EXIST] *)
+      )
+    | Path.Dir n -> (
+        is_link p_str >>= function
+        | `Yes -> reify_link Path.dir_of_any_kind p_abs n p_str
+        | `No ->  Deferred.Or_error.return p
+        | `Unknown -> assert false (* [EXIST] *)
+      )
+    | Path.Link (n, target) -> (
+        let k p =
+          reify p >>=? fun p ->
+          match Path.Item.link n p with
+          | `Ok link_item ->
+            Deferred.Or_error.return (Path.cons p_abs link_item)
+          | _ -> assert false
+        in
+        match Path.kind_of target with
+          | `Abs p -> k p
+          | `Rel p_rel ->
+            k Path.(normalize (concat p_abs p_rel))
+            (* THIS SHOULD BE DISCUSSED: REL TARGET IS TRANFORMED TO
+               ABS TARGET *)
+      )
+    | Path.Broken_link _ -> Deferred.Or_error.return p
+    | Path.Dot -> assert false (* not possible, path is normalized *)
+    | Path.Dotdot -> assert false (* not possible, path is normalized *)
+
+
+and reify_link
+  : type o.
+    (string -> o Path.of_any_kind Or_error.t) ->
+    (Path.abs, Path.dir) Path.t ->
+    Path.name ->
+    string ->
+    (Path.abs, o) Path.t Deferred.Or_error.t
+  = fun parse p_abs n p_str ->
+    Unix.readlink p_str >>= fun target_str ->
+    try_with Unix.(fun () -> stat p_str) >>= function
+    | Ok stats -> ( (* hence the target exists! *)
+        let target =
+          parse target_str
+          |> ok_exn (* safe because the target exists, meaning the
+                       target path is syntactically valid *)
+          |> (function
+              | `Abs p -> p
+              | `Rel p -> Path.(normalize (concat p_abs p)))
+        in
+        reify target >>=? fun reified_target ->
+        Deferred.Or_error.return (
+          Path.Item.link n reified_target
+          |> function
+          | `Ok x -> Path.cons p_abs x
+          | `Broken _ -> assert false
+        )
+      )
+    | Error _ ->
+      Deferred.Or_error.errorf
+        "Expected a file at %s but got a broken link"
+        p_str
+
+
+
+
 let rec fold_aux p_abs p_rel obj ~f ~init =
   let dir = Path.(concat p_abs p_rel |> normalize) in
   match obj with

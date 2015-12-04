@@ -17,6 +17,10 @@ val find_item
   -> abs_dir list
   -> (abs,'typ) t option Deferred.t
 
+val reify :
+  (abs, dir) t ->
+  (abs, dir) t Deferred.Or_error.t
+
 val fold :
   (abs, dir) t ->
   f:('a -> [ `File of (rel, file) t
