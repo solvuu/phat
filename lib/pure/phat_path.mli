@@ -78,7 +78,7 @@ type file = [`File]
 type dir  = [`Dir]
 type link = [`Link]
 
-type ('kind,'typ) item = private
+type ('kind,'typ) item =
   | Root : (abs,dir) item
   | File : name -> (rel,file) item
   | Dir : name -> (rel,dir) item
@@ -112,16 +112,6 @@ val compare : ('kind,'typ) t -> ('kind,'typ) t -> int
 
 
 (** {2 Constructors} *)
-
-module Item : sig
-  val root : (abs, dir) item
-  val dot : (rel, dir) item
-  val dotdot : (rel, dir) item
-  val file : name -> (rel, file) item
-  val dir : name -> (rel, dir) item
-  val link : name -> (_, 't) t -> [ `Ok of (rel, 't) item | `Broken of (rel, link) item ]
-  val broken_link : name -> string list -> (rel, link) item
-end
 
 (** Unix root directory "/". *)
 val root : abs_dir

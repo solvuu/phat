@@ -28,26 +28,22 @@ let rec random_rel_dir_item ?(no_link = false) ?root ?level () =
   match Random.bool () || bottom, Random.float 1. > 0.2 with
   | true, b ->
     if no_link || b then
-      Phat.Item.dir (new_name ())
+      Phat.Dir (new_name ())
     else (
-      Phat.map_any_kind (random_dir_path ~no_link ?root ?level ()) { Phat.map = fun p ->
-          match Phat.Item.link (new_name ()) p with
-          | `Ok l -> l
-          | `Broken _ -> assert false (* cannot happen, since we're generating a new name for each link *)
-        }
+      Phat.map_any_kind
+        (random_dir_path ~no_link ?root ?level ())
+        { Phat.map = fun p -> Phat.Link (new_name (), p) }
     )
-  | false, true -> Phat.Item.dot
-  | false, false -> Phat.Item.dotdot
+  | false, true -> Phat.Dot
+  | false, false -> Phat.Dotdot
 
 and random_rel_file_item ?(no_link = false) ?root ?level () =
   if no_link || Random.float 1. > 0.1 then
-    Phat.Item.file (new_name ())
+    Phat.File (new_name ())
   else (
-    Phat.map_any_kind (random_file_path ~no_link ?root ?level ()) { Phat.map = fun p ->
-        match Phat.Item.link (new_name ()) p with
-        | `Ok l -> l
-        | `Broken _ -> assert false (* cannot happen, since we're generating a new name for each link *)
-      }
+    Phat.map_any_kind
+      (random_file_path ~no_link ?root ?level ())
+      { Phat.map = fun p -> Phat.Link (new_name (), p) }
   )
 
 and random_dir_path ?no_link ?root ?level () =
@@ -83,9 +79,7 @@ and random_rel_file_path ?no_link ?root ?level () =
    [p] resolves (the name is a tiny bit misleading) *)
 and random_path_resolving_to ?root ?level p () =
   let link = Phat.map_any_kind p { Phat.map = fun p ->
-      match Phat.Item.link (new_name ()) p with
-      | `Ok l -> l
-      | `Broken _ -> assert false (* cannot happen, since we're generating a new name for each link *)
+      Phat.Link (new_name (), p)
     } in
   if Random.float 1. < 0.1 then
     `Rel (Phat.Item link)
@@ -254,15 +248,11 @@ let filesys_exists ctx =
        in
        assert_failure msg
   in
-  let foo = Phat.(Item (Item.dir (name_exn "foo"))) in
-  let foo_bar = Phat.(cons foo (Item.dir (name_exn "bar"))) in
-  let foo_bar_baz = Phat.(cons foo_bar (Item.file (name_exn "baz"))) in
-  let qux = Phat.(match Item.link (name_exn "qux") foo_bar_baz with
-    | `Ok l -> Item l
-    | _ -> assert false
-    )
-  in
-  let broken = Phat.(Item (Item.broken_link (name_exn "broken") ["foo" ; "bar" ; "booz" ])) in
+  let foo = Phat.(Item (Dir (name_exn "foo"))) in
+  let foo_bar = Phat.(cons foo (Dir (name_exn "bar"))) in
+  let foo_bar_baz = Phat.(cons foo_bar (File (name_exn "baz"))) in
+  let qux = Phat.(Item (Link (name_exn "qux", foo_bar_baz))) in
+  let broken = Phat.(Item (Broken_link (name_exn "broken", ["foo" ; "bar" ; "booz" ]))) in
   create_test_directory tmpdir >>= fun () ->
   check foo >>= fun () ->
   check foo_bar >>= fun () ->

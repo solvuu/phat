@@ -199,7 +199,7 @@ and mkdir_aux
           | `Abs dir -> mkdir_main seen' dir
         )
       | Path.Cons (Path.Dir n, p_rel') -> (
-          let p_abs' = Path.cons p_abs (Path.Item.dir n) in
+          let p_abs' = Path.cons p_abs (Path.Dir n) in
           exists p_abs' >>= (fun x -> match x with
             | `Yes -> return (Ok ())
             | `No | `Unknown -> unix_mkdir p_abs'
@@ -250,10 +250,10 @@ let rec fold_aux p_abs p_rel obj ~f ~init =
         (
           match stats.Unix.Stats.kind with
           | `File | `Block | `Char | `Fifo | `Socket ->
-            return (`File (Path.Item.file n))
+            return (`File (Path.File n))
 
           | `Directory ->
-            return (`Dir (Path.Item.dir n))
+            return (`Dir (Path.Dir n))
 
           | `Link ->
             reify_link subdir_as_str n
@@ -271,9 +271,7 @@ and reify_link dir_as_str n =
         match f target with (* parse target of the link *)
         | Ok target ->
           Path.map_any_kind target { Path.map = fun x ->
-              match Path.Item.link n x with
-              | `Ok x -> cons x
-              | `Broken _ -> assert false
+              cons (Path.Link (n, x))
             }
         | Error _ ->
           (* should not happen since the target exists
@@ -293,13 +291,13 @@ and reify_link dir_as_str n =
         assert false
     )
   | Error _ ->
-    let bl = Path.Item.broken_link n (String.split ~on:'/' target) in
+    let bl = Path.Broken_link (n, String.split ~on:'/' target) in
     `Broken_link bl
 
 let fold start ~f ~init =
   exists start >>= function
   | `Yes ->
-    fold_aux start Path.(Item (Item.dot)) (`Dir Path.Item.dot) ~f ~init >>| fun r ->
+    fold_aux start Path.(Item (Path.Dot)) (`Dir Path.Dot) ~f ~init >>| fun r ->
     Ok r
 
   | `No | `Unknown ->
