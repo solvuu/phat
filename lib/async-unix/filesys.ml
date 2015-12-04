@@ -29,6 +29,25 @@ let file_exists x =
 let is_file = Sys.is_file ~follow_symlinks:false
 let is_directory = Sys.is_directory ~follow_symlinks:false
 
+let wrap_unix loc f =
+  try_with f >>|
+  Or_error.of_exn_result >>|
+  Or_error.tag_loc loc
+
+let unix_mkdir p =
+  wrap_unix _here_ (fun () -> Unix.mkdir (Path.to_string p))
+
+let unix_symlink link_path ~targets:link_target =
+  wrap_unix _here_ (fun () ->
+      Unix.symlink ~dst:(Path.to_string link_path) ~src:(Path.to_string link_target)
+    )
+
+let realpath x =
+  wrap_unix _here_ (fun () ->
+      In_thread.run (fun () -> Filename.realpath x)
+    )
+
+
 let is_link p =
   file_exists p >>= function
   | `No
@@ -153,19 +172,6 @@ let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   Or_error.of_exn_result >>|
   Or_error.tag_loc _here_
 
-let wrap_unix loc f =
-  try_with f >>|
-  Or_error.of_exn_result >>|
-  Or_error.tag_loc loc
-
-let unix_mkdir p =
-  wrap_unix _here_ (fun () -> Unix.mkdir (Path.to_string p))
-
-let unix_symlink link_path ~targets:link_target =
-  wrap_unix _here_ (fun () ->
-      Unix.symlink ~dst:(Path.to_string link_path) ~src:(Path.to_string link_target)
-    )
-
 let rec mkdir_main
   : Cursor_set.t -> Path.abs_dir -> Cursor_set.t Or_error.t Deferred.t
   = fun seen p ->
@@ -235,13 +241,13 @@ let rec find_item item path =
 let rec fold_aux p_abs p_rel obj ~f ~init =
   let dir = Path.(concat p_abs p_rel |> normalize) in
   match obj with
-  | `File file -> f init (`File (Path.cons p_rel file))
-  | `Broken_link bl ->  f init (`Broken_link (Path.cons p_rel bl))
+  | `File file -> f init p_abs (`File (Path.cons p_rel file))
+  | `Broken_link bl ->  f init p_abs (`Broken_link (Path.cons p_rel bl))
   | `Dir subdir_item ->
     let subdir_rel = Path.cons p_rel subdir_item in
     let subdir = Path.cons dir subdir_item in
     let subdir_as_str = Path.to_string subdir in
-    f init (`Dir subdir_rel) >>= fun accu -> (* prefix traversal *)
+    f init p_abs (`Dir subdir_rel) >>= fun accu -> (* prefix traversal *)
     Sys.readdir subdir_as_str >>= fun dir_contents ->
     Deferred.Array.fold dir_contents ~init:accu ~f:(fun accu obj ->
         let obj_as_str = Filename.concat subdir_as_str obj in
@@ -300,6 +306,120 @@ let fold start ~f ~init =
   exists start >>= function
   | `Yes ->
     fold_aux start Path.(Item (Item.dot)) (`Dir Path.Item.dot) ~f ~init >>| fun r ->
+    Ok r
+
+  | `No | `Unknown ->
+    errorh _here_ "Directory does not exist" () sexp_of_unit
+    |> return
+
+(* file system object *)
+module Wrapped_path = struct
+  type t = P : (_, _) Path.t -> t
+  let compare = compare
+  let t_of_sexp _ = assert false
+  let sexp_of_t _ = assert false
+end
+
+(* wrapped path set *)
+module WPS = struct
+  open Wrapped_path
+  include Set.Make(Wrapped_path)
+  let add set p = add set (P p)
+  let add_obj set = function
+      `File file -> add set file
+    | `Dir dir -> add set dir
+    | `Broken_link bl -> add set bl
+  let mem set p = mem set (P p)
+  let mem_obj set = function
+      `File file -> mem set file
+    | `Dir dir -> mem set dir
+    | `Broken_link bl -> mem set bl
+end
+
+module Fold_wrap = struct
+  type ('a, 'b) path = ('a, 'b) Path.t
+  open Path
+
+  type t =
+    | `File of (abs, file) path
+    | `Dir of (abs, dir) path
+    | `Link
+end
+
+(*
+   PRECONDITIONS:
+   - [obj] refers to an existing object
+   - [obj] contains only normalized paths
+ *)
+let rec fold_follows_links visited resolved_visited obj ~f ~(init:'a) : ('a * WPS.t * WPS.t) Deferred.Or_error.t =
+  if WPS.mem_obj visited obj then Deferred.Or_error.return (init, visited, resolved_visited) else (
+    match obj with
+    | `File file ->
+      let file_str = Path.to_string file in
+      realpath file_str >>=? fun resolved_file_str ->
+      return (Path.abs_file resolved_file_str) >>=? fun resolved_file ->
+      let already_visited = WPS.mem resolved_visited resolved_file in
+      f init (`File (file, resolved_file, already_visited)) >>= fun result ->
+      let visited' = WPS.add_obj visited obj in
+      let resolved_visited' = WPS.add resolved_visited resolved_file in
+      Deferred.Or_error.return (result, visited', resolved_visited')
+
+    | `Dir dir ->
+      let dir_str = Path.to_string dir in
+      realpath dir_str >>=? fun resolved_dir_str ->
+      return (Path.abs_dir resolved_dir_str) >>=? fun resolved_dir ->
+      let already_visited = WPS.mem resolved_visited resolved_dir in
+      f init (`Dir (dir, resolved_dir, already_visited)) >>= fun result ->
+      let visited' = WPS.add_obj visited obj in
+      let resolved_visited' = WPS.add resolved_visited resolved_dir in
+
+      Sys.readdir dir_str >>| Array.to_list >>= fun dir_contents ->
+      let init = result, visited', resolved_visited' in
+      Deferred.Or_error.List.fold dir_contents ~init ~f:(fun (accu, visited, resolved_visited) obj ->
+          let obj_as_str = Filename.concat dir_str obj in
+          let n = Path.name_exn obj in
+          Unix.(lstat obj_as_str) >>= fun stats ->
+          match stats.Unix.Stats.kind with
+          | `File | `Block | `Char | `Fifo | `Socket ->
+            let next_obj = `File (Path.(cons dir (Item.file n))) in
+            fold_follows_links visited resolved_visited next_obj ~f ~init:accu
+
+          | `Directory ->
+            let next_obj = `Dir (Path.(cons dir (Item.dir n))) in
+            fold_follows_links visited resolved_visited next_obj ~f ~init:accu
+
+          | `Link ->
+            reify_link dir_str (Path.name_exn obj) >>= function
+            | `File link_item ->
+              let link = Path.cons dir link_item in
+              
+        )
+
+    | `Broken_link bl ->
+(*
+      let bl_str = Path.to_string bl in
+      let bl_parent_str = Filename.dirname bl_str in
+      let bl_name = Filename.basename bl_str in
+      realpath bl_parent_str >>=? fun resolved_bl_parent_str ->
+      let resolved_bl_str = Filename.concat resolved_bl_parent_str bl_name in
+
+   (* ARG: should parse a broken_link *)
+      return (Path.abs_file resolved_bl_str) >>=? fun resolved_file ->
+      let already_visited = WPS.mem resolved_visited resolved_file in
+      f init (`File (file, resolved_file, already_visited)) >>= fun result ->
+      let visited' = WPS.add_obj visited obj in
+      let resolved_visited' = WPS.add resolved_visited in
+      return (result, visited', resolved_visited')
+*)
+      assert false
+  )
+
+
+
+let fold_follows_links start ~f ~init =
+  exists start >>= function
+  | `Yes ->
+    fold_follows_links WPS.empty WPS.empty (`Dir start)  ~f ~init >>| fun r ->
     Ok r
 
   | `No | `Unknown ->
