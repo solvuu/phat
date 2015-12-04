@@ -320,27 +320,6 @@ let fold_works_on_test_directory ctx =
   | Ok l -> assert_equal ~printer:(List.to_string ~f:ident) expected (List.rev l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
-(* let filesys_mkdir_cycles ctx = *)
-(*   let tmpdir = OUnit2.bracket_tmpdir ctx in *)
-(*   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in *)
-(*   let rec foo_bar = Phat.(Item (Link (name_exn "bar", baz_qux))) *)
-(*   and baz_qux = Phat.(Item (Link (name_exn "qux", foo_bar))) *)
-(*   in *)
-(*   let p = Phat.concat tmpdir_path foo_bar in *)
-(*   Phat.mkdir p >>= function *)
-(*   | Ok () -> *)
-(*     Phat.exists p >>| fun file_exists -> *)
-(*     if file_exists <> `Yes then ( *)
-(*       assert_failure "mkdir failed to create the cyclic path correctly." *)
-(*     ) *)
-(*   | Error e -> *)
-(*     let msg = *)
-(*       sprintf *)
-(*         "mkdir failed to create cyclic path: %s" *)
-(*         (Sexp.to_string_hum (Error.sexp_of_t e)) *)
-(*     in *)
-(*     assert_failure msg *)
-
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
     "Sexp serialization" >:: sexp_serialization ;
@@ -352,7 +331,6 @@ let suite = "Phat test suite" >::: [
     "Exists test" >::= filesys_exists ;
     "Create dir paths" >::= filesys_mkdir ;
     "Fold works on test dir" >::= fold_works_on_test_directory ;
-    (* "Create dirs with cycles" >::= filesys_mkdir_cycles ; *)
   ]
 
 
