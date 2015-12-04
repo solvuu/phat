@@ -1,0 +1,6 @@
+"lib": include
+<lib/pure/*>: package(core_kernel), package(ppx_sexp_conv), package(ppx_here)
+<lib/pure/*.cmx>: for-pack(Phat_pure)
+<lib/async-unix/*>: thread, package(async), package(ppx_here)
+<lib/async-unix/*.cmx>: for-pack(Phat_async_unix)
+<app/*>: thread, package(async), package(oUnit)
