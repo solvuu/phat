@@ -153,61 +153,53 @@ let unix_symlink link_path ~targets:link_target =
       Unix.symlink ~dst:(Path.to_string link_path) ~src:(Path.to_string link_target)
     )
 
-let rec mkdir_main
-  : Cursor_set.t -> Path.abs_dir -> Cursor_set.t Or_error.t Deferred.t
-  = fun seen p ->
+let rec mkdir
+  : Path.abs_dir -> unit Or_error.t Deferred.t
+  = fun p ->
     match p with
-    | Path.Item Path.Root -> return (Ok seen)
+    | Path.Item Path.Root -> return (Ok ())
     | Path.Cons (Path.Root, rel_p) ->
-      mkdir_aux seen Path.root rel_p
+      mkdir_aux Path.root rel_p
 
 and mkdir_aux
-  : Cursor_set.t -> Path.abs_dir -> Path.rel_dir -> Cursor_set.t Or_error.t Deferred.t
-  = fun seen p_abs p_rel ->
-    if Cursor_set.mem seen p_abs p_rel then return (Ok seen)
-    else
-      let seen' = Cursor_set.add seen p_abs p_rel in
-      match p_rel with
-      | Path.Item (Path.Dir _) -> (
-          let p = Path.concat p_abs p_rel in
-          exists p >>= (fun x -> match x with
+  : Path.abs_dir -> Path.rel_dir -> unit Or_error.t Deferred.t
+  = fun p_abs p_rel ->
+    match p_rel with
+    | Path.Item (Path.Dir _) -> (
+        let p = Path.concat p_abs p_rel in
+        exists p >>= (fun x -> match x with
             | `Yes -> return (Ok ())
             | `No | `Unknown -> unix_mkdir p
-          ) >>|? fun () ->
-          seen'
-        )
-      | Path.Item Path.Dot -> return (Ok seen')
-      | Path.Item Path.Dotdot -> return (Ok seen')
-      | Path.Item (Path.Link (_, dir)) -> (
-          let p = Path.concat p_abs p_rel in
-          unix_symlink p ~targets:dir >>=? fun () ->
-          match Path.kind_of dir with
-          | `Rel dir -> mkdir_aux seen' p_abs dir
-          | `Abs dir -> mkdir_main seen' dir
-        )
-      | Path.Cons (Path.Dir n, p_rel') -> (
-          let p_abs' = Path.cons p_abs (Path.Dir n) in
-          exists p_abs' >>= (fun x -> match x with
+          )
+      )
+    | Path.Item Path.Dot -> return (Ok ())
+    | Path.Item Path.Dotdot -> return (Ok ())
+    | Path.Item (Path.Link (_, dir)) -> (
+        let p = Path.concat p_abs p_rel in
+        unix_symlink p ~targets:dir >>=? fun () ->
+        match Path.kind_of dir with
+        | `Rel dir -> mkdir_aux p_abs dir
+        | `Abs dir -> mkdir dir
+      )
+    | Path.Cons (Path.Dir n, p_rel') -> (
+        let p_abs' = Path.cons p_abs (Path.Dir n) in
+        exists p_abs' >>= (fun x -> match x with
             | `Yes -> return (Ok ())
             | `No | `Unknown -> unix_mkdir p_abs'
           ) >>=? fun () ->
-          mkdir_aux seen' p_abs' p_rel'
-        )
-      | Path.Cons (Path.Link (_, dir) as l, p_rel') -> (
-          unix_symlink (Path.cons p_abs l) ~targets:dir >>=? fun () ->
-          match Path.kind_of dir with
-          | `Rel dir ->
-            mkdir_aux seen' p_abs (Path.concat dir p_rel')
-          | `Abs dir ->
-            mkdir_main seen' (Path.concat dir p_rel')
-        )
-      | Path.Cons (Path.Dot, p_rel') -> mkdir_aux seen' p_abs p_rel'
-      | Path.Cons (Path.Dotdot, p_rel') ->
-        mkdir_aux seen' (Path.parent p_abs) p_rel'
-
-and mkdir p =
-  mkdir_main Cursor_set.empty p >>| fun _ ->
-  Ok ()
+        mkdir_aux p_abs' p_rel'
+      )
+    | Path.Cons (Path.Link (_, dir) as l, p_rel') -> (
+        unix_symlink (Path.cons p_abs l) ~targets:dir >>=? fun () ->
+        match Path.kind_of dir with
+        | `Rel dir ->
+          mkdir_aux p_abs (Path.concat dir p_rel')
+        | `Abs dir ->
+          mkdir (Path.concat dir p_rel')
+      )
+    | Path.Cons (Path.Dot, p_rel') -> mkdir_aux p_abs p_rel'
+    | Path.Cons (Path.Dotdot, p_rel') ->
+      mkdir_aux (Path.parent p_abs) p_rel'
 
 let rec find_item item path =
   match path with
