@@ -7,3 +7,5 @@
 /tmp/
 /.merlin
 *~
+*.native
+*.byte
