@@ -78,75 +78,62 @@ module Cursor_set = struct
   let mem set p q = mem set (Path_cursor.make p q)
 end
 
-let rec exists_main
-  : type typ. Cursor_set.t -> (Path.abs, typ) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
+let rec exists
+  : type typ. (Path.abs, typ) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
   =
   let open Path in
-  fun seen -> function
-    | Item Root ->
-      file_exists "/" >>| fun r ->
-      (seen, r)
-    | Cons (Root, p_rel) ->
-      file_exists "/" >>= fun r ->
-      and_check2 (fun seen -> exists_rel_path seen root p_rel) (seen, r)
+  function
+  | Item Root -> file_exists "/"
+  | Cons (Root, p_rel) ->
+    file_exists "/"
+    >>= and_check (exists_rel_path root) p_rel
 
 and exists_item
-    : type typ. Cursor_set.t -> Path.abs_dir -> (Path.rel,typ) Path.item -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
-    =
-    fun seen p_abs item ->
-      match item with
-      | Path.Dot -> return (seen, `Yes)
-      | Path.Dotdot -> return (seen, `Yes)
-      | Path.File _ ->
-        let p_abs' = Path.to_string (Path.cons p_abs item) in
-        file_exists p_abs' >>= and_check is_file p_abs' >>| fun file_exists ->
-        seen, file_exists
-      | Path.Dir _ ->
-        let p_abs' = Path.to_string (Path.cons p_abs item) in
-        file_exists p_abs' >>= and_check is_directory p_abs' >>| fun dir_exists ->
-        seen, dir_exists
-      | Path.Broken_link (_, target) ->
-        let target_does_not_exist target =
-          let target_as_str = Filename.of_parts target in
-          file_exists (
-            match target with
-            | "/" :: _ -> target_as_str
-            | _ -> Filename.concat (Path.to_string p_abs) target_as_str
-          )
-          >>| negate
-        in
-        let p_abs' = Path.to_string (Path.cons p_abs item) in
-        file_exists p_abs'
-        >>= and_check is_link p_abs'
-        >>= and_check target_does_not_exist target >>| fun broken_link_exists ->
-        seen, broken_link_exists
-      | Path.Link (_, target) ->
-        let target_exists seen =
-          match Path.kind_of target with
-          | `Abs p -> exists_main seen p
-          | `Rel p -> exists_rel_path seen p_abs p
-        in
-        let p_abs' = Path.to_string (Path.cons p_abs item) in
-        file_exists p_abs' >>= and_check is_link p_abs' >>= fun link_exists ->
-        (seen, link_exists) |> and_check2 target_exists
+  : type typ. Path.abs_dir -> (Path.rel,typ) Path.item -> [ `Yes | `Unknown | `No ] Deferred.t
+  =
+  fun p_abs item ->
+    match item with
+    | Path.Dot -> return `Yes
+    | Path.Dotdot -> return `Yes
+    | Path.File _ ->
+      let p_abs' = Path.to_string (Path.cons p_abs item) in
+      file_exists p_abs' >>= and_check is_file p_abs'
+    | Path.Dir _ ->
+      let p_abs' = Path.to_string (Path.cons p_abs item) in
+      file_exists p_abs' >>= and_check is_directory p_abs'
+    | Path.Broken_link (_, target) ->
+      let target_does_not_exist target =
+        let target_as_str = Filename.of_parts target in
+        file_exists (
+          match target with
+          | "/" :: _ -> target_as_str
+          | _ -> Filename.concat (Path.to_string p_abs) target_as_str
+        )
+        >>| negate
+      in
+      let p_abs' = Path.to_string (Path.cons p_abs item) in
+      file_exists p_abs'
+      >>= and_check is_link p_abs'
+      >>= and_check target_does_not_exist target
+    | Path.Link (_, target) ->
+      let target_exists target =
+        match Path.kind_of target with
+        | `Abs p -> exists p
+        | `Rel p -> exists_rel_path p_abs p
+      in
+      let p_abs' = Path.to_string (Path.cons p_abs item) in
+      file_exists p_abs'
+      >>= and_check is_link p_abs'
+      >>= and_check target_exists target
 
 and exists_rel_path
-    : type typ. Cursor_set.t -> Path.abs_dir -> (Path.rel,typ) Path.t -> (Cursor_set.t * [ `Yes | `Unknown | `No ]) Deferred.t
-    =
-    fun seen p_abs p_rel ->
-      if Cursor_set.mem seen p_abs p_rel then return (seen, `Yes)
-      else (
-        let seen' = Cursor_set.add seen p_abs p_rel in
-        match p_rel with
-        | Path.Item x -> exists_item seen' p_abs x
-        | Path.Cons (x, y) ->
-          exists_item seen' p_abs x
-          >>= and_check2 (fun seen -> exists_rel_path seen (Path.cons p_abs x) y)
-      )
-
-and exists p =
-  exists_main Cursor_set.empty p >>| snd
-
+  : type typ. Path.abs_dir -> (Path.rel,typ) Path.t -> [ `Yes | `Unknown | `No ] Deferred.t
+  = fun p_abs p_rel ->
+    match p_rel with
+    | Path.Item x -> exists_item p_abs x
+    | Path.Cons (x, y) ->
+      exists_item p_abs x
+      >>= and_check (exists_rel_path (Path.cons p_abs x)) y
 
 let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   try_with (fun () -> Unix.lstat (Path.to_string p)) >>|
