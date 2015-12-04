@@ -462,64 +462,6 @@ open Elem
 (* Constructors                                                               *)
 (******************************************************************************)
 
-module Link = struct
-  type ('a, 'b) path = ('a, 'b) t
-
-  module Arg = struct
-    type t = P : _ path -> t
-    let make p = P p
-    let compare = Pervasives.compare
-    let t_of_sexp _ = assert false
-    let sexp_of_t _ = assert false
-  end
-
-  module Set = struct
-    include Set.Make(Arg)
-    let add set p = add set (Arg.make p)
-    let mem set p = mem set (Arg.make p)
-  end
-
-  let rec is_cyclic
-    :  _ t -> bool =
-    fun p -> is_cyclic_main Set.empty p
-
-  and is_cyclic_main
-    : type k typ. Set.t -> (k, typ) path -> bool
-    = fun stack p ->
-      if Set.mem stack p then true
-      else
-        let stack' = Set.add stack p in
-        match p with
-        | Item x -> is_cyclic_item stack' x
-        | Cons (item, path) ->
-          is_cyclic_item stack' item || is_cyclic_main stack' path
-
-  and is_cyclic_item
-    : type k typ. Set.t -> (k, typ) item -> bool
-    = fun stack x ->
-      match x with
-      | Link (_, target) -> is_cyclic_main stack target
-      | _ -> false
-end
-
-module Item = struct
-  let root = Root
-  let dot = Dot
-  let dotdot = Dotdot
-
-  let file n = File n
-  let dir n = Dir n
-
-  let link n p =
-    let l = Link (n, p) in
-    if Link.is_cyclic (Item l) then
-      `Broken (Broken_link (n, (Elem.path_to_elems p :> string list)))
-    else
-      `Ok l
-
-  let broken_link n l = Broken_link (n, l)
-end
-
 let root = Item Root
 
 let cons x y = concat x (Item y)
