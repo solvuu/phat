@@ -3,8 +3,8 @@
 #require "core async ppx_deriving ppx_sexp_conv sexplib oUnit";;
 
 #directory "_build/lib";;
-#load "phat-pure.cma";;
-#load "phat-async-unix.cma";;
+#load "phat_pure.cma";;
+#load "phat_async_unix.cma";;
 
 open Core.Std;;
 open Async.Std;;
