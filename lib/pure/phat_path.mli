@@ -177,3 +177,23 @@ val resolve : (abs, 'typ) t -> (abs, 'typ) t
 val resolve_any_kind : ('kind, 'typ) t -> 'typ of_any_kind
 
 val parent : ('kind, _) t -> ('kind, dir) t
+
+(**
+This function is useful when you have two absolute paths and want to
+have a relative path from one to the other.
+
+In particular, the following property holds (at least it should):
+
+[equal p (concat q (make_relative p ~from:q))]
+
+The trivial solution is to go back to Root, but the algorithm
+implemented tries to be (only slightly) more clever by detecting a
+common prefix. This can be pretty involved because of link
+indirections, so the algorithm only improves on the trivial approach
+on a few number of cases.
+
+Note that this is a function on paths only, so it doesn't try to
+detect impossible cases where arguments correspond to different
+objects at the same location in the filesystem.
+*)
+val make_relative : (abs, 'typ) t -> from:(abs, dir) t -> (rel, 'typ) t

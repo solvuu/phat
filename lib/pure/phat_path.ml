@@ -314,6 +314,110 @@ let compare
   : type a b. (a,b) t -> (a,b) t -> int
   = fun p q -> compare (normalize p) (normalize q)
 
+module Make_relative = struct
+
+  let rec skip_common_prefix
+    : type typ.
+        (rel, dir) t ->
+        (rel, dir) t ->
+        (rel, dir) t option * (rel, dir) t option
+    = fun p1 p2 ->
+      match p1, p2 with
+      | Item (Dir d1), Item (Dir d2) ->
+        if d1 = d2 then None, None else Some p1, Some p2
+      | Item (Dir d1), Cons (Dir d2, q2) ->
+        if d1 = d2 then None, Some q2 else Some p1, Some p2
+      | Cons (Dir d1, q1), Item (Dir d2) ->
+        if d1 = d2 then Some q1, None else Some p1, Some p2
+      | Cons (Dir d1, q1), Cons (Dir d2, q2) ->
+        if d1 = d2 then skip_common_prefix q1 q2 else Some p1, Some p2
+      | _, _ -> Some p1, Some p2
+
+
+  let rec backwards
+    : type k. (k, dir) t -> (rel, dir) t option
+    =
+    let open Option.Monad_infix in
+    function
+    | Item Root -> Some (Item Dot)
+    | Item (Dir _) -> Some (Item Dotdot)
+    | Item (Link _) -> Some (Item Dotdot)
+    | Item Dot -> Some (Item Dot)
+    | Item Dotdot -> None
+    | Cons (Root, p_rel) -> backwards p_rel
+    | Cons (Dir _, p_rel) ->
+      backwards p_rel >>| fun q -> Cons(Dotdot, q)
+    | Cons (Link _, p_rel) ->
+      backwards p_rel >>| fun q -> Cons(Dotdot, q)
+    | Cons (Dot, p_rel) -> backwards p_rel
+    | Cons (Dotdot, _) -> None
+
+  let rec last_item
+    : type o. (rel, o) t -> (rel, o) t
+    = function
+        Item i as p -> p
+      | Cons (_, q) -> last_item q
+
+  type _ ty =
+    | TyFile : file ty
+    | TyDir  : dir ty
+    | TyLink : link ty
+
+  let rec ty
+    : type k o. (k, o) t -> o ty
+    = function
+      | Item i -> item_ty i
+      | Cons (_, p) -> ty p
+  and item_ty
+    : type k o. (k, o) item -> o ty
+    = function
+      | Root -> TyDir
+      | Dir _ -> TyDir
+      | Dot -> TyDir
+      | Dotdot -> TyDir
+      | File _ -> TyFile
+      | Broken_link _ -> TyLink
+      | Link (_, target) -> ty target
+
+  let make_relative
+    : type o. (abs, o) t -> from:(abs, dir) t -> (rel, o) t
+    = fun p ~from:origin ->
+      match normalize origin, normalize p with
+      | Item Root, Item Root -> Item Dot
+      | Item Root, Cons (Root, p_rel) -> p_rel
+      | Cons (Root, p_rel), Item Root ->
+        Option.value_exn (backwards (normalize origin))
+        (* backwards provides a result if the path is absolute and normalized *)
+      | Cons (Root, q_rel), Cons (Root, p_rel) ->
+        let rec k
+          : type o. o ty -> (rel, o) t -> (rel, o) t
+          = fun p_rel_ty p_rel ->
+            match p_rel_ty  with
+            | TyDir -> (
+                match skip_common_prefix q_rel p_rel with
+                | None, None -> Item Dot
+                | Some q_rel, None -> (
+                    Option.value_exn (backwards q_rel)
+                  )
+                | None, Some p_rel -> p_rel
+                | Some q_rel, Some p_rel ->
+                  let backwards_q_rel = Option.value_exn (backwards q_rel) (* q_rel has no Dotdot *) in
+                  normalize (concat backwards_q_rel p_rel)
+              )
+            | TyFile -> (
+                let p_rel_parent = parent p_rel in
+                normalize (concat (k (ty p_rel_parent) p_rel_parent) (last_item p_rel))
+              )
+            | TyLink -> (
+                let p_rel_parent = parent p_rel in
+                normalize (concat (k (ty p_rel_parent) p_rel_parent) (last_item p_rel))
+              )
+        in
+        k (ty p_rel) p_rel
+end
+
+let make_relative = Make_relative.make_relative
+
 (******************************************************************************)
 (* Elems - internal use only                                             *)
 (******************************************************************************)
