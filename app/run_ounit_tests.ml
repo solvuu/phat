@@ -33,6 +33,31 @@ and update_level_item
     | Phat.Link (_, p) -> update_level i p
     | Phat.Broken_link _ -> i + 1
 
+let rec pp_path
+  : type k o. Format.formatter -> (k, o) Phat.t -> unit
+  = fun fmt p ->
+    match p with
+    | Phat.Item i ->
+      Format.pp_print_string fmt (elem_of_item i)
+    | Phat.Cons (Phat.Root, p_rel) ->
+      pp_path fmt p_rel
+    | Phat.Cons (i, rest) ->
+      let elem = elem_of_item i in
+      Format.fprintf fmt "/ %s" elem ;
+      Format.open_box (String.length elem + 2) ;
+      pp_path fmt rest ;
+      Format.close_box ()
+
+and elem_of_item : type a b . (a,b) Phat.item -> string = Phat.(function
+    | Root -> "/"
+    | Dir x -> (x :> string)
+    | File x -> (x :> string)
+    | Broken_link (x, _) -> (x :> string)
+    | Link (x,_) -> (x :> string)
+    | Dot -> "."
+    | Dotdot -> ".."
+  )
+
 let new_name =
   let k = ref (- 1) in
   fun () ->
@@ -445,6 +470,36 @@ let fold_works_on_test_directory ctx =
   | Ok l -> assert_equal ~printer:(List.to_string ~f:ident) expected (List.sort ~cmp:compare l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
+
+let reify_directory ctx =
+  let tmpdir = OUnit2.bracket_tmpdir ctx in
+  let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
+  List.init 1000 ~f:(fun _ -> ()) |>
+  Deferred.List.iter ~f:(fun () ->
+      let p =
+        random_rel_dir_path ~root:tmpdir_path ~level:0 ()
+        |> Phat.concat tmpdir_path
+        |> Phat.normalize
+      in
+      let p_str = Phat.to_string p in
+      Phat.mkdir p >>= function
+      | Ok () -> (
+          Phat.abs_dir p_str |> ok_exn |> Phat.reify >>= function
+          | Ok q ->
+            if p <> q then (
+              Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
+              let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n%s\n" stdout (string_hum_of_path p) (string_hum_of_path q) in
+              assert_failure msg
+            )
+            else return ()
+          | Error e ->
+            Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>= fun stdout ->
+            let msg = sprintf "Tree:\n%s\n\nError:\n%s\n" stdout (Error.to_string_hum e) in
+            assert_failure msg
+        )
+      | Error _ -> assert_failure "mkdir failure"
+    )
+
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
     "Sexp serialization" >:: sexp_serialization ;
@@ -458,6 +513,7 @@ let suite = "Phat test suite" >::: [
     "Exists as other object" >::= filesys_exists_as_other_object ;
     "Create dir paths" >::= filesys_mkdir ;
     "Fold works on test dir" >::= fold_works_on_test_directory ;
+    "Reify directory" >::= reify_directory ;
   ]
 
 

@@ -266,7 +266,9 @@ let rec reify
     exists p >>= function
     | `No | `Unknown ->
       Deferred.Or_error.errorf "No such file or directory %s" (Path.to_string p)
-    | `Yes ->
+    | `Yes_as_other_object ->
+      Deferred.Or_error.errorf "Path %s is not of the expected type" (Path.to_string p)
+    | `Yes | `Yes_modulo_links ->
       match Path.normalize p with
       | Path.Item Path.Root -> Deferred.Or_error.return p
       | Path.Cons (Path.Root, p_rel) ->
