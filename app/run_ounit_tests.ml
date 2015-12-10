@@ -12,6 +12,7 @@ let (>::=) test_name (f : test_ctxt -> unit Deferred.t) : test =
   )
 
 let string_of_path x = Sexp.to_string (Phat.sexp_of_t x)
+let string_hum_of_path x = Sexp.to_string_hum (Phat.sexp_of_t x)
 
 let rec update_level
   : type k o. int -> (k, o) Phat.t -> int
@@ -283,6 +284,57 @@ let filesys_exists ctx =
   check qux >>= fun () ->
   check broken
 
+let filesys_exists_modulo_links ctx =
+  let tmpdir = OUnit2.bracket_tmpdir ctx in
+  let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
+  List.init 1000 ~f:(fun _ -> ()) |>
+  Deferred.List.iter ~f:(fun () ->
+    let p = random_abs_dir_path ~root:tmpdir_path ~level:0 () in
+    (
+      Phat.mkdir p >>= function
+      | Ok () -> (
+          let q = Phat.abs_dir (Phat.to_string p) |> ok_exn in
+          Phat.exists q >>| function
+          | `Yes_modulo_links -> ()
+          | `Yes ->
+            if Phat.has_link p then
+              let msg =
+                sprintf
+                  "exists sees:\n\n%s\n\nas:\n\n%s\n"
+                  (string_hum_of_path p)
+                  (string_hum_of_path q)
+              in
+              assert_failure msg
+            else ()
+          | `Yes_as_other_object ->
+              let msg =
+                sprintf
+                  "exists sees:\n\n%s\n\nas another object when given:\n\n%s\n"
+                  (string_hum_of_path p)
+                  (string_hum_of_path q)
+              in
+              assert_failure msg
+          | `No
+          | `Unknown ->
+            let msg =
+              sprintf
+                "exists does not see:\n\n%s"
+                (string_hum_of_path p)
+            in
+            assert_failure msg
+        )
+      | Error e ->
+        let msg =
+          sprintf
+            "mkdir failed to create path %s: %s"
+            (Sexp.to_string_hum (Phat.sexp_of_t p))
+            (Sexp.to_string_hum (Error.sexp_of_t e))
+        in
+        return (ignore (assert_failure msg))
+    ) >>= fun () ->
+    Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
+  )
+
 let filesys_mkdir ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
@@ -353,6 +405,7 @@ let suite = "Phat test suite" >::: [
     "Resolution is the identity for paths without links" >:: resolution_is_identity_for_paths_without_links ;
     "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ;
     "Exists test" >::= filesys_exists ;
+    "Exists modulo link" >::= filesys_exists_modulo_links ;
     "Create dir paths" >::= filesys_mkdir ;
     "Fold works on test dir" >::= fold_works_on_test_directory ;
   ]

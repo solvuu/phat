@@ -76,11 +76,9 @@ let exists_as_file p =
               | `No -> return `Yes_as_other_object
               | `Unknown -> return `Unknown
               | `Yes -> (
-                  (* FIXME !!! *)
-                  Unix.readlink p >>= is_file >>| function
-                  | `Yes -> `Yes_modulo_links
-                  | `Unknown -> `Unknown
-                  | `No -> `Yes_as_other_object
+                  Unix.stat p >>| function
+                  | { Unix.Stats.kind = `File } -> `Yes_modulo_links
+                  | _ -> `Yes_as_other_object
                 )
             )
         )
@@ -101,10 +99,9 @@ let exists_as_directory p =
               | `No -> return `Yes_as_other_object
               | `Unknown -> return `Unknown
               | `Yes -> (
-                  Unix.readlink p >>= is_directory >>| function
-                  | `Yes -> `Yes_modulo_links
-                  | `Unknown -> `Unknown
-                  | `No -> `Yes_as_other_object
+                  Unix.stat p >>| function
+                  | { Unix.Stats.kind = `Directory } -> `Yes_modulo_links
+                  | _ -> `Yes_as_other_object
                 )
             )
         )
