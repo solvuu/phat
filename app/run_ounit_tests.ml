@@ -335,6 +335,55 @@ let filesys_exists_modulo_links ctx =
     Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
   )
 
+let filesys_exists_as_other_object ctx =
+  let tmpdir = OUnit2.bracket_tmpdir ctx in
+  let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
+  List.init 1000 ~f:(fun _ -> ()) |>
+  Deferred.List.iter ~f:(fun () ->
+      let p = (* This is needed to be sure the string representation of the dir can be parsed as a file *)
+        Phat.(
+          cons
+            (random_abs_dir_path ~no_link:true ~root:tmpdir_path ~level:0 ())
+            (Dir (name_exn "foo"))
+        )
+      in
+      (
+        Phat.mkdir p >>= function
+        | Ok () -> (
+            let q = Phat.abs_file (Phat.to_string p) |> ok_exn in
+            Phat.exists q >>| function
+            | `Yes_modulo_links
+            | `Yes ->
+              let msg =
+                sprintf
+                  "exists does not see that:\n\n%s\n\nand:\n\n%s\n\nhave different types\n"
+                  (string_hum_of_path p)
+                  (string_hum_of_path q)
+              in
+              assert_failure msg
+            | `Yes_as_other_object -> ()
+            | `No
+            | `Unknown ->
+              let msg =
+                sprintf
+                  "exists does not see:\n\n%s\n\nwhen given:\n\n%s\n"
+                  (string_hum_of_path p)
+                  (string_hum_of_path q)
+              in
+              assert_failure msg
+          )
+        | Error e ->
+          let msg =
+            sprintf
+              "mkdir failed to create path %s: %s"
+              (Sexp.to_string_hum (Phat.sexp_of_t p))
+              (Sexp.to_string_hum (Error.sexp_of_t e))
+          in
+          return (ignore (assert_failure msg))
+      ) >>= fun () ->
+      Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
+    )
+
 let filesys_mkdir ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
@@ -406,6 +455,7 @@ let suite = "Phat test suite" >::: [
     "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ;
     "Exists test" >::= filesys_exists ;
     "Exists modulo link" >::= filesys_exists_modulo_links ;
+    "Exists as other object" >::= filesys_exists_as_other_object ;
     "Create dir paths" >::= filesys_mkdir ;
     "Fold works on test dir" >::= fold_works_on_test_directory ;
   ]
