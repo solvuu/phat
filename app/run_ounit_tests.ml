@@ -295,7 +295,7 @@ let filesys_mkdir ctx =
   )
 
 let fold_works_on_test_directory ctx =
-  let expected = [
+  let expected = List.sort ~cmp:compare [
     "(Cons Dot(Item Dot))" ;
     "(Cons Dot(Cons Dot(Item(Broken_link broken(foo bar booz)))))" ;
     "(Cons Dot(Cons Dot(Item(Dir foo))))" ;
@@ -318,7 +318,7 @@ let fold_works_on_test_directory ctx =
       return ((str_of_elt elt) :: accu)
     )
   >>| function
-  | Ok l -> assert_equal ~printer:(List.to_string ~f:ident) expected (List.rev l)
+  | Ok l -> assert_equal ~printer:(List.to_string ~f:ident) expected (List.sort ~cmp:compare l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
 let suite = "Phat test suite" >::: [
