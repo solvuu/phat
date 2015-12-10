@@ -3,7 +3,7 @@ open Core.Std
 open Async.Std
 open Phat_path
 
-val exists : (abs, _) t -> [ `Yes | `Unknown | `No ] Deferred.t
+val exists : (abs, _) t -> [ `Yes | `Yes_modulo_links | `Yes_as_other_object | `Unknown | `No ] Deferred.t
 
 val lstat : (abs, _) t -> Unix.Stats.t Or_error.t Deferred.t
 

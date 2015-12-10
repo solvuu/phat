@@ -260,6 +260,8 @@ let filesys_exists ctx =
   let check p =
     Phat.exists (Phat.concat tmpdir_path p) >>| function
     | `Yes -> ()
+    | `Yes_modulo_links
+    | `Yes_as_other_object
     | `Unknown
     | `No ->
        let msg =
@@ -292,6 +294,8 @@ let filesys_mkdir ctx =
       | Ok () -> (
           Phat.exists p >>| function
           | `Yes -> ()
+          | `Yes_modulo_links
+          | `Yes_as_other_object
           | `No
           | `Unknown ->
             let msg =
