@@ -3,6 +3,16 @@ open Core.Std
 open Async.Std
 open Phat_path
 
+(** [exists p] is either:
+   - [`Yes] if [p] exists verbatim on the file system
+   - [`Yes_modulo_links] if [p] makes sense on the file system (that
+     is [p] corresponds to an object of the correct type on the file system)
+   - [`Yes_as_other_object] if [p] exists but corresponds to an
+     incompatible object (file instead of dir, link with a different
+     target, ...)
+   - [`No] if [p] does not correspond to any object on the file system
+   - [`Unknown] if permissions are not enough to test the existence of
+     [p] *)
 val exists : (abs, _) t -> [ `Yes | `Yes_modulo_links | `Yes_as_other_object | `Unknown | `No ] Deferred.t
 
 val lstat : (abs, _) t -> Unix.Stats.t Or_error.t Deferred.t
