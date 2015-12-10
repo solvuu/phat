@@ -7,7 +7,8 @@ module Phat = Phat_async_unix.Std
 let (>::=) test_name (f : test_ctxt -> unit Deferred.t) : test =
   test_name >:: (
     fun test_ctxt ->
-    Thread_safe.block_on_async_exn (fun () -> f test_ctxt)
+      try Thread_safe.block_on_async_exn (fun () -> f test_ctxt)
+      with exn -> raise (Monitor.extract_exn exn)
   )
 
 let string_of_path x = Sexp.to_string (Phat.sexp_of_t x)
