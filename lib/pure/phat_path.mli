@@ -151,6 +151,9 @@ val string_of_item : (_, _) item -> string
 
 val is_normalized : (_, _) t -> bool
 
+(** Return true if given path has a link. Only [Link], not
+    [Broken_link], is treated as a link here under the assumption that
+    callers of this function will likely be checking for valid links. *)
 val has_link : (_, _) t -> bool
 
 type ('typ, 'a) map_any_kind = { map : 'kind. ('kind, 'typ) t -> 'a }
