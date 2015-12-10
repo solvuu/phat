@@ -13,6 +13,25 @@ let (>::=) test_name (f : test_ctxt -> unit Deferred.t) : test =
 
 let string_of_path x = Sexp.to_string (Phat.sexp_of_t x)
 
+let rec update_level
+  : type k o. int -> (k, o) Phat.t -> int
+  = fun l -> function
+    | Phat.Item i -> update_level_item l i
+    | Phat.Cons (h, t) ->
+      let l' = update_level_item l h in
+      update_level l' t
+
+and update_level_item
+  : type k o. int -> (k, o) Phat.item -> int
+  = fun i -> function
+    | Phat.Root -> 0
+    | Phat.Dir _ -> i + 1
+    | Phat.File _ -> i + 1
+    | Phat.Dot -> i
+    | Phat.Dotdot -> i - 1
+    | Phat.Link (_, p) -> update_level i p
+    | Phat.Broken_link _ -> i + 1
+
 let new_name =
   let k = ref (- 1) in
   fun () ->
@@ -21,20 +40,21 @@ let new_name =
     |> Phat.name
     |> ok_exn
 
+(* The level argument is used to make sure we don't add too many
+   Dotdot in the path. This is useful if generated paths must lie in
+   some directory *)
 let rec random_rel_dir_item ?(no_link = false) ?root ?level () =
   let bottom = match level with
     | Some l -> l <= 0
     | None -> false
   in
-  match Random.bool () || bottom, Random.float 1. > 0.2 with
-  | true, b ->
-    if no_link || b then
-      Phat.Dir (new_name ())
-    else (
-      Phat.map_any_kind
-        (random_dir_path ~no_link ?root ?level ())
-        { Phat.map = fun p -> Phat.Link (new_name (), p) }
-    )
+  match Random.bool () || bottom, no_link || Random.float 1. > 0.2 with
+  | true, true ->
+    Phat.Dir (new_name ())
+  | true, false ->
+    Phat.map_any_kind
+      (random_dir_path ~no_link ?root ?level ())
+      { Phat.map = fun p -> Phat.Link (new_name (), p) }
   | false, true -> Phat.Dot
   | false, false -> Phat.Dotdot
 
@@ -49,31 +69,31 @@ and random_rel_file_item ?(no_link = false) ?root ?level () =
 
 and random_dir_path ?no_link ?root ?level () =
   match Random.bool () with
-  | true -> `Abs (random_abs_dir_path ?no_link ?root ?level ())
+  | true -> `Abs (random_abs_dir_path ?no_link ?root ())
   | false -> `Rel (random_rel_dir_path ?no_link ?root ?level ())
 
 and random_file_path ?no_link ?root ?level () =
   match Random.bool () with
-  | true -> `Abs (random_abs_file_path ?no_link ?root ?level ())
+  | true -> `Abs (random_abs_file_path ?no_link ?root ())
   | false -> `Rel (random_rel_file_path ?no_link ?root ?level ())
 
-and random_abs_dir_path ?no_link ?(root = Phat.root) ?level () =
-  Phat.concat root (random_rel_dir_path ?no_link ~root ?level ())
+and random_abs_dir_path ?no_link ?(root = Phat.root) ?(level = 0) () =
+  Phat.concat root (random_rel_dir_path ?no_link ~root ~level ())
 
 and random_rel_dir_path ?no_link ?root ?level () =
   let d = random_rel_dir_item ?no_link ?root ?level () in
   if Random.bool () then
-    let level = Option.map level ~f:(fun i -> i - 1) in
+    let level = Option.map level ~f:(fun i -> update_level_item i d) in
     Phat.Cons (d, random_rel_dir_path ?no_link ?root ?level ())
   else
     Phat.Item d
 
-and random_abs_file_path ?no_link ?(root = Phat.root) ?level () =
-  Phat.concat root (random_rel_file_path ?no_link ~root ?level ())
+and random_abs_file_path ?no_link ?(root = Phat.root) ?(level = 0) () =
+  Phat.concat root (random_rel_file_path ?no_link ~root ~level ())
 
 and random_rel_file_path ?no_link ?root ?level () =
   Phat.concat
-    (random_rel_dir_path ?no_link ?root ?level:(Option.map level ~f:(fun x -> x - 1)) ())
+    (random_rel_dir_path ?no_link ?root ?level ())
     (Phat.Item (random_rel_file_item ?no_link ?root ?level ()))
 
 (* [random_path_resolving_to p] generates a path that resolves to what
@@ -261,13 +281,12 @@ let filesys_exists ctx =
   check qux >>= fun () ->
   check broken
 
-
 let filesys_mkdir ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   List.init 1000 ~f:(fun _ -> ()) |>
   Deferred.List.iter ~f:(fun () ->
-    let p = Phat.concat tmpdir_path (random_rel_dir_path ~root:tmpdir_path ~level:0 ()) in
+    let p = random_abs_dir_path ~root:tmpdir_path () in
     (
       Phat.mkdir p >>= function
       | Ok () -> (
