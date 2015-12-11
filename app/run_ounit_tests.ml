@@ -11,52 +11,36 @@ let (>::=) test_name (f : test_ctxt -> unit Deferred.t) : test =
       with exn -> raise (Monitor.extract_exn exn)
   )
 
+let deferred_repeat n ~f =
+  List.init 1000 ~f:(fun _ -> ())
+  |> Deferred.List.iteri ~how:`Sequential ~f:(fun i () -> f i)
+
 let string_of_path x = Sexp.to_string (Phat.sexp_of_t x)
 let string_hum_of_path x = Sexp.to_string_hum (Phat.sexp_of_t x)
 
 let rec update_level
-  : type k o. int -> (k, o) Phat.t -> int
-  = fun l -> function
-    | Phat.Item i -> update_level_item l i
+  : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.t -> int
+  = fun ~root l -> function
+    | Phat.Item i -> update_level_item ~root l i
     | Phat.Cons (h, t) ->
-      let l' = update_level_item l h in
-      update_level l' t
+      let l' = update_level_item ~root l h in
+      update_level ~root l' t
 
 and update_level_item
-  : type k o. int -> (k, o) Phat.item -> int
-  = fun i -> function
+  : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.item -> int
+  = fun ~root i -> function
     | Phat.Root -> 0
     | Phat.Dir _ -> i + 1
     | Phat.File _ -> i + 1
     | Phat.Dot -> i
     | Phat.Dotdot -> i - 1
-    | Phat.Link (_, p) -> update_level i p
+    | Phat.Link (_, p) -> (
+        match Phat.kind_of p with
+        | `Abs p ->
+          update_level ~root i p - update_level ~root:Phat.root 0 root
+        | `Rel p ->  update_level ~root i p
+      )
     | Phat.Broken_link _ -> i + 1
-
-let rec pp_path
-  : type k o. Format.formatter -> (k, o) Phat.t -> unit
-  = fun fmt p ->
-    match p with
-    | Phat.Item i ->
-      Format.pp_print_string fmt (elem_of_item i)
-    | Phat.Cons (Phat.Root, p_rel) ->
-      pp_path fmt p_rel
-    | Phat.Cons (i, rest) ->
-      let elem = elem_of_item i in
-      Format.fprintf fmt "/ %s" elem ;
-      Format.open_box (String.length elem + 2) ;
-      pp_path fmt rest ;
-      Format.close_box ()
-
-and elem_of_item : type a b . (a,b) Phat.item -> string = Phat.(function
-    | Root -> "/"
-    | Dir x -> (x :> string)
-    | File x -> (x :> string)
-    | Broken_link (x, _) -> (x :> string)
-    | Link (x,_) -> (x :> string)
-    | Dot -> "."
-    | Dotdot -> ".."
-  )
 
 let new_name =
   let k = ref (- 1) in
@@ -68,75 +52,76 @@ let new_name =
 
 (* The level argument is used to make sure we don't add too many
    Dotdot in the path. This is useful if generated paths must lie in
-   some directory *)
-let rec random_rel_dir_item ?(no_link = false) ?root ?level () =
-  let bottom = match level with
-    | Some l -> l <= 0
-    | None -> false
-  in
-  match Random.bool () || bottom, no_link || Random.float 1. > 0.2 with
-  | true, true ->
+   some directory The link_level argument is there to limit the number
+   of link indirections. *)
+let rec random_rel_dir_item ~link_level ~root ~level () =
+  let bottom = level <= 0 in
+  let no_link = link_level <= 0 in
+  if Random.bool () then
     Phat.Dir (new_name ())
-  | true, false ->
+  else if Random.bool () && not no_link then
     Phat.map_any_kind
-      (random_dir_path ~no_link ?root ?level ())
+      (random_dir_path ~link_level:(link_level - 1) ~root ~level ())
       { Phat.map = fun p -> Phat.Link (new_name (), p) }
-  | false, true -> Phat.Dot
-  | false, false -> Phat.Dotdot
+  else if Random.bool () && not bottom then
+    Phat.Dotdot
+  else
+    Phat.Dot
 
-and random_rel_file_item ?(no_link = false) ?root ?level () =
+and random_rel_file_item ~link_level ~root ~level () =
+  let no_link = link_level <= 0 in
   if no_link || Random.float 1. > 0.1 then
     Phat.File (new_name ())
   else (
     Phat.map_any_kind
-      (random_file_path ~no_link ?root ?level ())
+      (random_file_path ~link_level:(link_level - 1) ~root ~level ())
       { Phat.map = fun p -> Phat.Link (new_name (), p) }
   )
 
-and random_dir_path ?no_link ?root ?level () =
+and random_dir_path ~link_level ~root ~level () =
   match Random.bool () with
-  | true -> `Abs (random_abs_dir_path ?no_link ?root ())
-  | false -> `Rel (random_rel_dir_path ?no_link ?root ?level ())
+  | true -> `Abs (random_abs_dir_path ~link_level ~root ())
+  | false -> `Rel (random_rel_dir_path ~link_level ~root ~level ())
 
-and random_file_path ?no_link ?root ?level () =
+and random_file_path ~link_level ~root ~level () =
   match Random.bool () with
-  | true -> `Abs (random_abs_file_path ?no_link ?root ())
-  | false -> `Rel (random_rel_file_path ?no_link ?root ?level ())
+  | true -> `Abs (random_abs_file_path ~link_level ~root ())
+  | false -> `Rel (random_rel_file_path ~link_level ~root ~level ())
 
-and random_abs_dir_path ?no_link ?(root = Phat.root) ?(level = 0) () =
-  Phat.concat root (random_rel_dir_path ?no_link ~root ~level ())
+and random_abs_dir_path ~link_level ?(root = Phat.root) () =
+  Phat.concat root (random_rel_dir_path ~link_level ~root ~level:0 ())
 
-and random_rel_dir_path ?no_link ?root ?level () =
-  let d = random_rel_dir_item ?no_link ?root ?level () in
-  if Random.bool () then
-    let level = Option.map level ~f:(fun i -> update_level_item i d) in
-    Phat.Cons (d, random_rel_dir_path ?no_link ?root ?level ())
+and random_rel_dir_path ~link_level ~root ~level () =
+  let d = random_rel_dir_item ~link_level ~root ~level () in
+  if Random.float 1. < 0.6 then
+    let level = update_level_item ~root level d in
+    Phat.Cons (d, random_rel_dir_path ~link_level ~root ~level ())
   else
     Phat.Item d
 
-and random_abs_file_path ?no_link ?(root = Phat.root) ?(level = 0) () =
-  Phat.concat root (random_rel_file_path ?no_link ~root ~level ())
+and random_abs_file_path ~link_level ?(root = Phat.root) () =
+  Phat.concat root (random_rel_file_path ~link_level ~root ~level:0 ())
 
-and random_rel_file_path ?no_link ?root ?level () =
+and random_rel_file_path ~link_level ~root ~level () =
   Phat.concat
-    (random_rel_dir_path ?no_link ?root ?level ())
-    (Phat.Item (random_rel_file_item ?no_link ?root ?level ()))
+    (random_rel_dir_path ~link_level ~root ~level ())
+    (Phat.Item (random_rel_file_item ~link_level ~root ~level ()))
 
 (* [random_path_resolving_to p] generates a path that resolves to what
-   [p] resolves (the name is a tiny bit misleading) *)
-and random_path_resolving_to ?root ?level p () =
+   [p] resolves to (the name is a tiny bit misleading) *)
+and random_path_resolving_to ~link_level ~root ~level p () =
   let link = Phat.map_any_kind p { Phat.map = fun p ->
       Phat.Link (new_name (), p)
     } in
   if Random.float 1. < 0.1 then
     `Rel (Phat.Item link)
   else
-    match random_dir_path ?root ?level () with
+    match random_dir_path ~link_level ~root ~level () with
     | `Abs dir -> `Abs (Phat.concat dir (Phat.Item link))
     | `Rel dir -> `Rel (Phat.concat dir (Phat.Item link))
 
-and random_path_with_link ?root ?level () =
-  random_path_resolving_to (random_dir_path ?root ?level ())
+and random_path_with_link ~link_level ~root ~level () =
+  random_path_resolving_to (random_dir_path ~link_level ~root ~level ())
 
 let not_names = [
   "foo/" ;
@@ -173,8 +158,8 @@ let sexp_serialization _ =
       assert_failure msg
   in
   for _ = 1 to 1000 do
-    check Phat.abs_dir_of_sexp (random_abs_dir_path ()) ;
-    check Phat.abs_file_of_sexp (random_abs_file_path ())
+    check Phat.abs_dir_of_sexp (random_abs_dir_path ~link_level:4 ()) ;
+    check Phat.abs_file_of_sexp (random_abs_file_path ~link_level:4 ())
   done
 
 let normalization _ =
@@ -189,7 +174,7 @@ let normalization _ =
     assert_bool msg (Phat.is_normalized p_norm)
   in
   for _ = 1 to 1000 do
-    match random_dir_path () with
+    match random_dir_path ~link_level:4 ~root:Phat.root ~level:0 () with
     | `Abs dir -> check dir
     | `Rel dir -> check dir
   done
@@ -208,7 +193,7 @@ let normalization_is_idempotent _ =
     assert_bool msg (p_norm = p_norm_norm)
   in
   for _ = 1 to 1000 do
-    Phat.map_any_kind (random_dir_path ()) { Phat.map = check }
+    Phat.map_any_kind (random_dir_path ~link_level:4 ~root:Phat.root ~level:0 ()) { Phat.map = check }
   done
 
 let resolution_for_eventually_abs_paths _ =
@@ -226,8 +211,8 @@ let resolution_for_eventually_abs_paths _ =
     if p_ref <> p_res then failure p_ref p p_res
   in
   for _ = 1 to 1000 do
-    let p_ref = random_abs_dir_path ~no_link:true () in
-    match random_path_resolving_to (`Abs p_ref) () with
+    let p_ref = random_abs_dir_path ~link_level:0 () in
+    match random_path_resolving_to ~link_level:4 ~root:Phat.root ~level:0 (`Abs p_ref) () with
     | `Abs p -> check p_ref p (Phat.resolve p)
     | `Rel p ->
       match Phat.resolve_any_kind p with
@@ -249,7 +234,7 @@ let resolution_is_identity_for_paths_without_links _ =
     if dir <> dir' then failure dir dir'
   in
   for _ = 1 to 1000 do
-    match random_dir_path ~no_link:true () with
+    match random_dir_path ~root:Phat.root ~level:0 ~link_level:0 () with
     | `Abs dir -> check dir (Phat.resolve dir)
     | `Rel dir ->
       match Phat.resolve_any_kind dir with
@@ -269,7 +254,7 @@ let resolution_eliminates_links _ =
   in
   let check p = Phat.map_any_kind (Phat.resolve_any_kind p) { Phat.map = fun p_res -> check_aux p p_res } in
   for _ = 1 to 1000 do
-    Phat.map_any_kind (random_dir_path ()) { Phat.map = check }
+    Phat.map_any_kind (random_dir_path ~link_level:4 ~root:Phat.root ~level:0 ()) { Phat.map = check }
   done
 
 let create_test_directory path =
@@ -312,26 +297,25 @@ let filesys_exists ctx =
 let filesys_exists_modulo_links ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  List.init 1000 ~f:(fun _ -> ()) |>
-  Deferred.List.iter ~f:(fun () ->
-    let p = random_abs_dir_path ~root:tmpdir_path ~level:0 () in
-    (
-      Phat.mkdir p >>= function
-      | Ok () -> (
-          let q = Phat.abs_dir (Phat.to_string p) |> ok_exn in
-          Phat.exists q >>| function
-          | `Yes_modulo_links -> ()
-          | `Yes ->
-            if Phat.has_link p then
-              let msg =
-                sprintf
-                  "exists sees:\n\n%s\n\nas:\n\n%s\n"
-                  (string_hum_of_path p)
-                  (string_hum_of_path q)
-              in
-              assert_failure msg
-            else ()
-          | `Yes_as_other_object ->
+  deferred_repeat 1000 ~f:(fun _ ->
+      let p = random_abs_dir_path ~link_level:4 ~root:tmpdir_path () in
+      (
+        Phat.mkdir p >>= function
+        | Ok () -> (
+            let q = Phat.abs_dir (Phat.to_string p) |> ok_exn in
+            Phat.exists q >>| function
+            | `Yes_modulo_links -> ()
+            | `Yes ->
+              if Phat.has_link p then
+                let msg =
+                  sprintf
+                    "exists sees:\n\n%s\n\nas:\n\n%s\n"
+                    (string_hum_of_path p)
+                    (string_hum_of_path q)
+                in
+                assert_failure msg
+              else ()
+            | `Yes_as_other_object ->
               let msg =
                 sprintf
                   "exists sees:\n\n%s\n\nas another object when given:\n\n%s\n"
@@ -339,26 +323,26 @@ let filesys_exists_modulo_links ctx =
                   (string_hum_of_path q)
               in
               assert_failure msg
-          | `No
-          | `Unknown ->
-            let msg =
-              sprintf
-                "exists does not see:\n\n%s"
-                (string_hum_of_path p)
-            in
-            assert_failure msg
-        )
-      | Error e ->
-        let msg =
-          sprintf
-            "mkdir failed to create path %s: %s"
-            (Sexp.to_string_hum (Phat.sexp_of_t p))
-            (Sexp.to_string_hum (Error.sexp_of_t e))
-        in
-        return (ignore (assert_failure msg))
-    ) >>= fun () ->
-    Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
-  )
+            | `No
+            | `Unknown ->
+              let msg =
+                sprintf
+                  "exists does not see:\n\n%s"
+                  (string_hum_of_path p)
+              in
+              assert_failure msg
+          )
+        | Error e ->
+          let msg =
+            sprintf
+              "mkdir failed to create path %s: %s"
+              (Sexp.to_string_hum (Phat.sexp_of_t p))
+              (Sexp.to_string_hum (Error.sexp_of_t e))
+          in
+          return (ignore (assert_failure msg))
+      ) >>= fun () ->
+      Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
+    )
 
 let filesys_exists_as_other_object ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
@@ -368,7 +352,7 @@ let filesys_exists_as_other_object ctx =
       let p = (* This is needed to be sure the string representation of the dir can be parsed as a file *)
         Phat.(
           cons
-            (random_abs_dir_path ~no_link:true ~root:tmpdir_path ~level:0 ())
+            (random_abs_dir_path ~link_level:4 ~root:tmpdir_path ())
             (Dir (name_exn "foo"))
         )
       in
@@ -414,8 +398,8 @@ let filesys_mkdir ctx =
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   List.init 1000 ~f:(fun _ -> ()) |>
   Deferred.List.iter ~f:(fun () ->
-    let p = random_abs_dir_path ~root:tmpdir_path () in
-    (
+      Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir) >>= fun () ->
+      let p = random_abs_dir_path ~root:tmpdir_path ~link_level:4 () in
       Phat.mkdir p >>= function
       | Ok () -> (
           Phat.exists p >>| function
@@ -434,14 +418,13 @@ let filesys_mkdir ctx =
       | Error e ->
         let msg =
           sprintf
-            "mkdir failed to create path %s: %s"
+            "mkdir failed to create path:\n\n%s\n\nError:\n\n%s\n\n%s\n"
             (Sexp.to_string_hum (Phat.sexp_of_t p))
             (Sexp.to_string_hum (Error.sexp_of_t e))
+            (Sexp.to_string_hum (Phat.sexp_of_t (Phat.resolve p)))
         in
         return (ignore (assert_failure msg))
-    ) >>= fun () ->
-    Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
-  )
+    )
 
 let fold_works_on_test_directory ctx =
   let expected = List.sort ~cmp:compare [
@@ -474,17 +457,17 @@ let fold_works_on_test_directory ctx =
 let reify_directory ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  List.init 1000 ~f:(fun _ -> ()) |>
-  Deferred.List.iter ~f:(fun () ->
+  deferred_repeat 1000 ~f:(fun i ->
+      Process.run ~prog:"rm" ~args:[ "-rf" ; tmpdir ] () >>| ok_exn >>= fun _ ->
       let p =
-        random_rel_dir_path ~root:tmpdir_path ~level:0 ()
+        random_rel_dir_path ~link_level:4 ~root:tmpdir_path ~level:0 ()
         |> Phat.concat tmpdir_path
-        |> Phat.normalize
       in
       let p_str = Phat.to_string p in
       Phat.mkdir p >>= function
       | Ok () -> (
-          Phat.abs_dir p_str |> ok_exn |> Phat.reify >>= function
+          let p_to_reify = 
+            Phat.abs_dir p_str |> ok_exn in Phat.reify p_to_reify >>= function
           | Ok q ->
             if p <> q then (
               Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
@@ -494,10 +477,12 @@ let reify_directory ctx =
             else return ()
           | Error e ->
             Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>= fun stdout ->
-            let msg = sprintf "Tree:\n%s\n\nError:\n%s\n" stdout (Error.to_string_hum e) in
+            let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nError:\n%s\n\n%s\n\n%s\n" stdout (string_hum_of_path p) (Error.to_string_hum e) p_str (string_hum_of_path p_to_reify) in
             assert_failure msg
         )
-      | Error _ -> assert_failure "mkdir failure"
+      | Error e ->
+        let msg = sprintf "Mkdir failure:\n\n%s\n" (Error.to_string_hum e) in
+        assert_failure msg
     )
 
 let suite = "Phat test suite" >::: [
@@ -516,5 +501,5 @@ let suite = "Phat test suite" >::: [
     "Reify directory" >::= reify_directory ;
   ]
 
-
+let () = Random.init 420
 let () = run_test_tt_main suite
