@@ -15,7 +15,7 @@ byte: $(patsubst %,lib/$(PROJECT)_%.cma,$(LIBS)) \
 %.cma %.cmxa %.cmxs %.native %.byte:
 	ocamlbuild $@
 
-project_files.stamp META $(PROJECT).install:
+project_files.stamp .merlin META $(PROJECT).install:
 	ocamlbuild $@
 
 test: app/run_ounit_tests.native
