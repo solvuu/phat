@@ -475,7 +475,9 @@ let reify_directory ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   List.init 1000 ~f:(fun _ -> ()) |>
-  Deferred.List.iter ~f:(fun () ->
+  Deferred.List.iteri ~how:`Sequential ~f:(fun i () ->
+            print_endline (string_of_int i) ;
+
       let p =
         random_rel_dir_path ~root:tmpdir_path ~level:0 ()
         |> Phat.concat tmpdir_path
@@ -484,35 +486,38 @@ let reify_directory ctx =
       let p_str = Phat.to_string p in
       Phat.mkdir p >>= function
       | Ok () -> (
-          Phat.abs_dir p_str |> ok_exn |> Phat.reify >>= function
+          let p_to_reify = 
+          Phat.abs_dir p_str |> ok_exn in Phat.reify p_to_reify >>= function
           | Ok q ->
-            if p <> q then (
-              Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
-              let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n%s\n" stdout (string_hum_of_path p) (string_hum_of_path q) in
-              assert_failure msg
+            (
+              if p <> q then (
+                Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
+                let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n%s\n" stdout (string_hum_of_path p) (string_hum_of_path q) in
+                assert_failure msg
+              )
+              else return ()
             )
-            else return ()
           | Error e ->
             Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>= fun stdout ->
-            let msg = sprintf "Tree:\n%s\n\nError:\n%s\n" stdout (Error.to_string_hum e) in
+            let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nError:\n%s\n\n%s\n\n%s\n" stdout (string_hum_of_path p) (Error.to_string_hum e) p_str (string_hum_of_path p_to_reify) in
             assert_failure msg
         )
       | Error _ -> assert_failure "mkdir failure"
     )
 
 let suite = "Phat test suite" >::: [
-    "Name constructor" >:: name_constructor ;
-    "Sexp serialization" >:: sexp_serialization ;
-    "Normalization" >:: normalization ;
-    "Normalization is idempotent" >:: normalization_is_idempotent ;
-    "Resolution eliminates links" >:: resolution_eliminates_links ;
-    "Resolution is the identity for paths without links" >:: resolution_is_identity_for_paths_without_links ;
-    "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ;
-    "Exists test" >::= filesys_exists ;
-    "Exists modulo link" >::= filesys_exists_modulo_links ;
-    "Exists as other object" >::= filesys_exists_as_other_object ;
-    "Create dir paths" >::= filesys_mkdir ;
-    "Fold works on test dir" >::= fold_works_on_test_directory ;
+    (* "Name constructor" >:: name_constructor ; *)
+    (* "Sexp serialization" >:: sexp_serialization ; *)
+    (* "Normalization" >:: normalization ; *)
+    (* "Normalization is idempotent" >:: normalization_is_idempotent ; *)
+    (* "Resolution eliminates links" >:: resolution_eliminates_links ; *)
+    (* "Resolution is the identity for paths without links" >:: resolution_is_identity_for_paths_without_links ; *)
+    (* "Resolution for eventually abs paths" >:: resolution_for_eventually_abs_paths ; *)
+    (* "Exists test" >::= filesys_exists ; *)
+    (* "Exists modulo link" >::= filesys_exists_modulo_links ; *)
+    (* "Exists as other object" >::= filesys_exists_as_other_object ; *)
+    (* "Create dir paths" >::= filesys_mkdir ; *)
+    (* "Fold works on test dir" >::= fold_works_on_test_directory ; *)
     "Reify directory" >::= reify_directory ;
   ]
 
