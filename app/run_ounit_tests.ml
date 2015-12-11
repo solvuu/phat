@@ -466,22 +466,22 @@ let reify_directory ctx =
       let p_str = Phat.to_string p in
       Phat.mkdir p >>= function
       | Ok () -> (
-          let p_to_reify = 
-            Phat.abs_dir p_str |> ok_exn in Phat.reify p_to_reify >>= function
-          | Ok q ->
-            if p <> q then (
-              Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
-              let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n%s\n" stdout (string_hum_of_path p) (string_hum_of_path q) in
-              assert_failure msg
+          Phat.abs_dir p_str |> ok_exn |> Phat.reify >>= function
+          | Ok q -> (
+              Phat.exists q >>= function
+              | `Yes -> return ()
+              | `Yes_modulo_links | `Yes_as_other_object | `No | `Unknown ->
+                Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
+                let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n\n%s\n" stdout (string_hum_of_path p) (string_hum_of_path q) in
+                assert_failure msg
             )
-            else return ()
           | Error e ->
             Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>= fun stdout ->
-            let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nError:\n%s\n\n%s\n\n%s\n" stdout (string_hum_of_path p) (Error.to_string_hum e) p_str (string_hum_of_path p_to_reify) in
+            let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nError:\n%s\n" stdout (string_hum_of_path p) (Error.to_string_hum e) in
             assert_failure msg
         )
       | Error e ->
-        let msg = sprintf "Mkdir failure:\n\n%s\n" (Error.to_string_hum e) in
+        let msg = sprintf "mkdir failure:\n\n%s\n" (Error.to_string_hum e) in
         assert_failure msg
     )
 
