@@ -1,4 +1,8 @@
 (** Build system. *)
+module List = struct
+  include List
+  include ListLabels
+end
 
 (** Information about a library or app provided by this project. *)
 module Info : sig
@@ -52,7 +56,7 @@ end = struct
   let is_lib item = match item.name with `Lib _ -> true | `App _ -> false
   let is_app item = match item.name with `Lib _ -> false | `App _ -> true
 
-  let names t = List.map (fun x -> match x.name with `Lib s | `App s -> s) t
+  let names t = List.map t ~f:(fun x -> match x.name with `Lib s | `App s -> s)
   let name_as_string = function `Lib x | `App x -> x
 
   let is_uniq (l : string list) : bool =
@@ -60,8 +64,8 @@ end = struct
     let n = List.length (List.sort_uniq compare l) in
     m = n
 
-  let libs t = List.filter is_lib t
-  let apps t = List.filter is_app t
+  let libs t = List.filter ~f:is_lib t
+  let apps t = List.filter ~f:is_app t
 
   let of_list items =
     let libs = names (libs items) in
@@ -73,7 +77,7 @@ end = struct
     else
       items
 
-  let get t name = List.find (fun x -> x.name = name) t
+  let get t name = List.find t ~f:(fun x -> x.name = name)
 
   let libs_direct t name = (get t name).libs
 
@@ -81,13 +85,13 @@ end = struct
     let rec loop libs_seen name : string list =
       match name with
       | `Lib lib -> (
-	if List.mem lib libs_seen then
+	if List.mem lib ~set:libs_seen then
 	  failwith "cycle detected in Info.data"
 	else
 	  let libs_seen = lib::libs_seen in
 	  let libs_direct = libs_direct t name in
 	  let libs_indirect =
-	    List.map (fun x -> loop libs_seen (`Lib x)) libs_direct
+	    List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
 	    |> List.flatten
 	  in
 	  libs_direct@libs_indirect
@@ -95,7 +99,7 @@ end = struct
       | `App _ -> (
 	let libs_direct = libs_direct t name in
 	let libs_indirect =
-	  List.map (fun x -> loop libs_seen (`Lib x)) libs_direct
+	  List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
 	  |> List.flatten
 	in
 	libs_direct@libs_indirect
@@ -110,14 +114,14 @@ end = struct
     let rec loop libs_seen name : string list =
       match name with
       | `Lib lib -> (
-	if List.mem lib libs_seen then
+	if List.mem lib ~set:libs_seen then
 	  failwith "cycle detected in Info.data"
 	else
 	  let libs_seen = lib::libs_seen in
 	  let libs_direct = libs_direct t name in
 	  let pkgs_direct = pkgs_direct t name in
 	  let pkgs_indirect =
-	    List.map (fun x -> loop libs_seen (`Lib x)) libs_direct
+	    List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
 	    |> List.flatten
 	  in
 	  pkgs_direct@pkgs_indirect
@@ -126,7 +130,7 @@ end = struct
 	let libs_direct = libs_direct t name in
 	let pkgs_direct = pkgs_direct t name in
 	let pkgs_indirect =
-	  List.map (fun x -> loop libs_seen (`Lib x)) libs_direct
+	  List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
           |> List.flatten
 	in
 	pkgs_direct@pkgs_indirect
@@ -149,19 +153,25 @@ end = struct
   open Printf
   open Ocamlbuild_plugin
 
+  (* override the one from Ocamlbuild_plugin *)
+  module List = struct
+    include List
+    include ListLabels
+  end
+
   let failwithf fmt = ksprintf (fun s () -> failwith s) fmt
   let dash_to_underscore x = String.map (function '-' -> '_' | c -> c) x
 
   let all_libs : string list =
     let found =
       Sys.readdir "lib" |> Array.to_list
-      |> List.filter (fun x -> Sys.is_directory ("lib"/x))
-      |> List.sort compare
+      |> List.filter ~f:(fun x -> Sys.is_directory ("lib"/x))
+      |> List.sort ~cmp:compare
     in
     let given =
       Info.libs Project.info
       |> Info.names
-      |> List.sort compare
+      |> List.sort ~cmp:compare
     in
     assert (found=given);
     given
@@ -169,13 +179,13 @@ end = struct
   let all_apps : string list =
     let found =
       Sys.readdir "app" |> Array.to_list
-      |> List.map Filename.chop_extension
-      |> List.sort compare
+      |> List.map ~f:Filename.chop_extension
+      |> List.sort ~cmp:compare
     in
     let given =
       Info.apps Project.info
       |> Info.names
-      |> List.sort compare
+      |> List.sort ~cmp:compare
     in
     assert (found=given);
     given
@@ -197,36 +207,32 @@ end = struct
       "true: thread, bin_annot, annot, short_paths, safe_string, debug";
       "\"lib\": include";
     ]
-    @(List.map
-	(fun x ->
-	  sprintf
-	    "<lib/%s/*.cmx>: for-pack(%s_%s)"
-	    x (String.capitalize Project.name) (dash_to_underscore x)
-	)
-	all_libs
+    @(List.map all_libs ~f:(fun x ->
+      sprintf
+	"<lib/%s/*.cmx>: for-pack(%s_%s)"
+	x (String.capitalize Project.name) (dash_to_underscore x) )
     )
     @(
       let libs = (Info.libs Project.info :> Info.item list) in
-      List.map
-	(fun lib -> lib.Info.name, Info.pkgs_all Project.info lib.Info.name)
-	libs
-      |> List.filter (function (_,[]) -> false | (_,_) -> true)
-      |> List.map (fun (name,pkgs) ->
+      List.map libs ~f:(fun lib ->
+	lib.Info.name, Info.pkgs_all Project.info lib.Info.name
+      )
+      |> List.filter ~f:(function (_,[]) -> false | (_,_) -> true)
+      |> List.map ~f:(fun (name,pkgs) ->
 	sprintf "<lib/%s/*>: %s"
 	  (Info.name_as_string name)
-	  (String.concat ", " (List.map (sprintf "package(%s)") pkgs))
+	  (String.concat ", " (List.map pkgs ~f:(sprintf "package(%s)")))
       )
     )
     @(
       let apps = (Info.apps Project.info :> Info.item list) in
-      List.map
-	(fun app -> app.Info.name, Info.pkgs_all Project.info app.Info.name)
-	apps
-      |> List.filter (function (_,[]) -> false | (_,_) -> true)
-      |> List.map (fun (name,pkgs) ->
+      List.map apps ~f:(fun app ->
+	app.Info.name, Info.pkgs_all Project.info app.Info.name )
+      |> List.filter ~f:(function (_,[]) -> false | (_,_) -> true)
+      |> List.map ~f:(fun (name,pkgs) ->
 	sprintf "<app/%s.*>: %s"
 	  (Info.name_as_string name)
-	  (String.concat "," (List.map (sprintf "package(%s)") pkgs))
+	  (String.concat "," (List.map pkgs ~f:(sprintf "package(%s)")))
       )
     )
 
@@ -240,15 +246,15 @@ end = struct
       "B +threads";
     ]
     @(
-      List.map (fun x -> x.Info.pkgs) (Project.info :> Info.item list)
+      List.map (Project.info :> Info.item list) ~f:(fun x -> x.Info.pkgs)
       |> List.flatten
       |> List.sort_uniq compare
-      |> List.map (fun x -> sprintf "PKG %s" x)
+      |> List.map ~f:(fun x -> sprintf "PKG %s" x)
     )
-    |> List.map (sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
+    |> List.map ~f:(sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
 
   let meta_file : string list =
-    List.map (fun x ->
+    List.map all_libs ~f:(fun x ->
       let lib_name = lib_name x in
       let requires : string list =
 	(Info.pkgs_all Project.info (`Lib x))
@@ -265,10 +271,11 @@ end = struct
 	sprintf "  requires = \"%s\"" (String.concat " " requires);
 	sprintf "  exists_if = \"%s.cma\"" lib_name;
 	sprintf ")";
-      ]) all_libs
+      ]
+    )
     |> List.flatten
-    |> List.filter ((<>) "")
-    |> List.map (sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
+    |> List.filter ~f:((<>) "")
+    |> List.map ~f:(sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
 
   let install_file : string list =
     let suffixes = [
@@ -276,25 +283,25 @@ end = struct
       "cmxs";"dll";"o";"so"]
     in
     let lib_files =
-      List.map (fun lib ->
+      List.map all_libs ~f:(fun lib ->
 	List.map (fun suffix ->
 	  sprintf "  \"?_build/lib/%s.%s\""
 	    (lib_name lib |> dash_to_underscore) suffix
 	) suffixes
-      ) all_libs
+      )
       |> List.flatten
       |> fun l -> "  \"_build/META\""::l
     in
     let app_files =
-      List.map (fun app ->
+      List.map all_apps ~f:(fun app ->
 	List.map (fun suffix ->
 	  sprintf "  \"?_build/app/%s.%s\" {\"%s\"}" app suffix app
 	) ["byte"; "native"]
-      ) all_apps
+      )
       |> List.flatten
     in
     ["lib: ["]@lib_files@["]"; ""; "bin: ["]@app_files@["]"]
-    |> List.map (sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
+    |> List.map ~f:(sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
 
   let make_static_file path contents =
     rule path ~prod:path (fun _ _ -> Echo (contents,path))
@@ -302,7 +309,7 @@ end = struct
   let dispatch () = dispatch (function
     | Before_options -> (
       Options.use_ocamlfind := true;
-      List.iter Ocamlbuild_pack.Configuration.parse_string tags_lines
+      List.iter tags_lines ~f:Ocamlbuild_pack.Configuration.parse_string
     )
     | After_rules -> (
       rule "m4: ml.m4 -> ml"
@@ -328,8 +335,8 @@ end = struct
 	~stamp:"project_files.stamp"
 	(fun _ build ->
 	  let project_files = [[".merlin"]] in
-	  List.map Outcome.good (build project_files)
-	  |> List.map (fun result ->
+	  List.map (build project_files) ~f:Outcome.good
+	  |> List.map ~f:(fun result ->
 	    Cmd (S [A "ln"; A "-sf";
 		    P (!Options.build_dir/result);
 		    P Pathname.pwd] )
