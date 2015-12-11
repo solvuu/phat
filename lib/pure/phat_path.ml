@@ -323,16 +323,14 @@ module Make_relative = struct
         (rel, dir) t option * (rel, dir) t option
     = fun p1 p2 ->
       match p1, p2 with
-      | Item (Dir d1), Item (Dir d2) ->
-        if d1 = d2 then None, None else Some p1, Some p2
-      | Item (Dir d1), Cons (Dir d2, q2) ->
-        if d1 = d2 then None, Some q2 else Some p1, Some p2
-      | Cons (Dir d1, q1), Item (Dir d2) ->
-        if d1 = d2 then Some q1, None else Some p1, Some p2
-      | Cons (Dir d1, q1), Cons (Dir d2, q2) ->
-        if d1 = d2 then skip_common_prefix q1 q2 else Some p1, Some p2
-      | _, _ -> Some p1, Some p2
-
+      | Item i1, Item i2 ->
+        if i1 = i2 then None, None else Some p1, Some p2
+      | Item i1, Cons (i2, q2) ->
+        if i1 = i2 then None, Some q2 else Some p1, Some p2
+      | Cons (i1, q1), Item i2 ->
+        if i1 = i2 then Some q1, None else Some p1, Some p2
+      | Cons (i1, q1), Cons (i2, q2) ->
+        if i1 = i2 then skip_common_prefix q1 q2 else Some p1, Some p2
 
   let rec backwards
     : type k. (k, dir) t -> (rel, dir) t option
