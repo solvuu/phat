@@ -1,25 +1,27 @@
-OCB=ocamlbuild
+PROJECT = phat
+LIBS = pure async_unix
+APPS = run_ounit_tests
 
-all: lib/phat_pure.cma lib/phat_pure.cmxa lib/phat_async_unix.cma \
-     lib/phat_async_unix.cmxa app/run_ounit_tests.native \
-     app/run_ounit_tests.byte
+# Default targets to build for developers.
+default: byte project_files.stamp
 
-%.cma:
-	$(OCB) $@
+native: $(patsubst %,lib/$(PROJECT)_%.cmxa,$(LIBS)) \
+	$(patsubst %,lib/$(PROJECT)_%.cmxs,$(LIBS)) \
+	$(patsubst %,app/%.native,$(APPS))
 
-%.cmxa:
-	$(OCB) $@
+byte: $(patsubst %,lib/$(PROJECT)_%.cma,$(LIBS)) \
+	$(patsubst %,app/%.byte,$(APPS))
 
-%.native:
-	$(OCB) $@
+%.cma %.cmxa %.cmxs %.native %.byte:
+	ocamlbuild $@
 
-%.byte:
-	$(OCB) $@
+project_files.stamp META:
+	ocamlbuild $@
 
 test: app/run_ounit_tests.native
-	./`basename $<`
+	_build/$<
 
 clean:
-	$(OCB) -clean
+	ocamlbuild -clean
 
-.PHONY: test clean all
+.PHONY: default all native byte clean test
