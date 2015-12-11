@@ -270,6 +270,32 @@ end = struct
     |> List.filter ((<>) "")
     |> List.map (sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
 
+  let install_file : string list =
+    let suffixes = [
+      "a";"annot";"cma";"cmi";"cmo";"cmt";"cmti";"cmx";"cmxa";
+      "cmxs";"dll";"o";"so"]
+    in
+    let lib_files =
+      List.map (fun lib ->
+	List.map (fun suffix ->
+	  sprintf "  \"?_build/lib/%s.%s\""
+	    (lib_name lib |> dash_to_underscore) suffix
+	) suffixes
+      ) all_libs
+      |> List.flatten
+      |> fun l -> "  \"_build/META\""::l
+    in
+    let app_files =
+      List.map (fun app ->
+	List.map (fun suffix ->
+	  sprintf "  \"?_build/app/%s.%s\" {\"%s\"}" app suffix app
+	) ["byte"; "native"]
+      ) all_apps
+      |> List.flatten
+    in
+    ["lib: ["]@lib_files@["]"; ""; "bin: ["]@app_files@["]"]
+    |> List.map (sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
+
   let make_static_file path contents =
     rule path ~prod:path (fun _ _ -> Echo (contents,path))
 
@@ -296,6 +322,7 @@ end = struct
 
       make_static_file ".merlin" merlin_file;
       make_static_file "META" meta_file;
+      make_static_file "phat.install" install_file;
 
       rule "project files"
 	~stamp:"project_files.stamp"
