@@ -1,4 +1,7 @@
 (** Build system. *)
+open Printf
+let failwithf fmt = ksprintf (fun s () -> failwith s) fmt
+
 module List = struct
   include List
   include ListLabels
@@ -67,6 +70,26 @@ end = struct
   let libs t = List.filter ~f:is_lib t
   let apps t = List.filter ~f:is_app t
 
+  let get t name = List.find t ~f:(fun x -> x.name = name)
+
+  (** Check that given item's [libs] dependencies do not lead to a
+      cycle. *)
+  let assert_no_cycle t item : unit =
+    let visited = ref [] in
+    let rec loop item =
+      match item.name with
+      | `App _ -> ()
+      | `Lib lib ->
+	 if List.mem lib ~set:!visited then
+	   failwithf "cycle involving %s detected in Info.t" lib ()
+	 else (
+	   visited := lib::!visited;
+	   let libs = List.map item.libs ~f:(fun x -> get t (`Lib x)) in
+	   List.iter libs ~f:loop
+	 )
+    in
+    loop item
+
   let of_list items =
     let libs = names (libs items) in
     let apps = names (apps items) in
@@ -74,70 +97,33 @@ end = struct
       failwith "lib names must be unique"
     else if not (is_uniq apps) then
       failwith "app names must be unique"
-    else
+    else (
+      List.iter items ~f:(assert_no_cycle items);
       items
-
-  let get t name = List.find t ~f:(fun x -> x.name = name)
+    )
 
   let libs_direct t name = (get t name).libs
 
-  let libs_all t name =
-    let rec loop libs_seen name : string list =
-      match name with
-      | `Lib lib -> (
-	if List.mem lib ~set:libs_seen then
-	  failwith "cycle detected in Info.data"
-	else
-	  let libs_seen = lib::libs_seen in
-	  let libs_direct = libs_direct t name in
-	  let libs_indirect =
-	    List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
-	    |> List.flatten
-	  in
-	  libs_direct@libs_indirect
-      )
-      | `App _ -> (
-	let libs_direct = libs_direct t name in
-	let libs_indirect =
-	  List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
-	  |> List.flatten
-	in
-	libs_direct@libs_indirect
-      )
-    in
-    loop [] name
+  let rec libs_all t name =
+    let item = get t name in
+    item.libs
+    @(
+      List.map item.libs ~f:(fun x -> libs_all t (`Lib x))
+      |> List.flatten
+    )
     |> List.sort_uniq compare
 
   let pkgs_direct t name = (get t name).pkgs
 
-  let pkgs_all t name =
-    let rec loop libs_seen name : string list =
-      match name with
-      | `Lib lib -> (
-	if List.mem lib ~set:libs_seen then
-	  failwith "cycle detected in Info.data"
-	else
-	  let libs_seen = lib::libs_seen in
-	  let libs_direct = libs_direct t name in
-	  let pkgs_direct = pkgs_direct t name in
-	  let pkgs_indirect =
-	    List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
-	    |> List.flatten
-	  in
-	  pkgs_direct@pkgs_indirect
-      )
-      | `App _ -> (
-	let libs_direct = libs_direct t name in
-	let pkgs_direct = pkgs_direct t name in
-	let pkgs_indirect =
-	  List.map libs_direct ~f:(fun x -> loop libs_seen (`Lib x))
-          |> List.flatten
-	in
-	pkgs_direct@pkgs_indirect
-      )
-    in
-    loop [] name
+  let rec pkgs_all t name =
+    let item = get t name in
+    item.pkgs
+    @(
+      List.map item.libs ~f:(fun x -> pkgs_all t (`Lib x))
+      |> List.flatten
+    )
     |> List.sort_uniq compare
+
 
 end
 
@@ -150,7 +136,6 @@ end
 module Make(Project:PROJECT) : sig
   val dispatch : unit -> unit
 end = struct
-  open Printf
   open Ocamlbuild_plugin
 
   (* override the one from Ocamlbuild_plugin *)
@@ -159,7 +144,6 @@ end = struct
     include ListLabels
   end
 
-  let failwithf fmt = ksprintf (fun s () -> failwith s) fmt
   let dash_to_underscore x = String.map (function '-' -> '_' | c -> c) x
 
   let all_libs : string list =
