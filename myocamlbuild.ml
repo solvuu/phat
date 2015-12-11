@@ -273,11 +273,6 @@ end = struct
   let make_static_file path contents =
     rule path ~prod:path (fun _ _ -> Echo (contents,path))
 
-  let project_files = [
-    ".merlin", merlin_file;
-    "META", meta_file;
-  ]
-
   let dispatch () = dispatch (function
     | Before_options -> (
       Options.use_ocamlfind := true;
