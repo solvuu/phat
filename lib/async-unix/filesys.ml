@@ -269,7 +269,7 @@ let rec reify
     | `Yes_as_other_object ->
       Deferred.Or_error.errorf "Path %s is not of the expected type" (Path.to_string p)
     | `Yes | `Yes_modulo_links ->
-      match Path.normalize p with
+      match p with
       | Path.Item Path.Root -> Deferred.Or_error.return p
       | Path.Cons (Path.Root, p_rel) ->
         reify_aux Path.root p_rel
@@ -280,12 +280,12 @@ and reify_aux
     (Path.rel, o) Path.t ->
     (Path.abs, o) Path.t Deferred.Or_error.t
   = fun p_abs p_rel ->
-  match p_rel with
-  | Path.Item i ->
-    reify_aux_item p_abs i
-  | Path.Cons (h, t) ->
-    reify_aux_item p_abs h >>=? fun p_abs' ->
-    reify_aux p_abs' t
+    match p_rel with
+    | Path.Item i ->
+      reify_aux_item p_abs i
+    | Path.Cons (h, t) ->
+      reify_aux_item p_abs h >>=? fun p_abs' ->
+      reify_aux p_abs' t
 
 and reify_aux_item
   : type o.
@@ -319,11 +319,11 @@ and reify_aux_item
           | `Rel p_rel ->
             k
               (Path.make_relative ~from:p_abs)
-              Path.(normalize (concat p_abs p_rel))
+              Path.(concat p_abs p_rel)
       )
     | Path.Broken_link _ -> Deferred.Or_error.return p
-    | Path.Dot -> assert false (* not possible, path is normalized *)
-    | Path.Dotdot -> assert false (* not possible, path is normalized *)
+    | Path.Dot -> Deferred.Or_error.return p
+    | Path.Dotdot -> Deferred.Or_error.return p
 
 
 and reify_link
@@ -345,7 +345,7 @@ and reify_link
         let abs_target = match target with
           | `Abs p -> p
           | `Rel p ->
-            Path.(normalize (concat p_abs p))
+            Path.concat p_abs p
         in
         reify abs_target >>=? fun reified_abs_target ->
         let link = match target with
