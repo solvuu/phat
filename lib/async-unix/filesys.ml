@@ -341,13 +341,19 @@ and reify_link
           parse target_str
           |> ok_exn (* safe because the target exists, meaning the
                        target path is syntactically valid *)
-          |> (function
-              | `Abs p -> p
-              | `Rel p -> Path.(normalize (concat p_abs p)))
         in
-        reify target >>=? fun reified_target ->
-        Path.cons p_abs (Path.Link (n, reified_target))
-        |> Deferred.Or_error.return
+        let abs_target = match target with
+          | `Abs p -> p
+          | `Rel p ->
+            Path.(normalize (concat p_abs p))
+        in
+        reify abs_target >>=? fun reified_abs_target ->
+        let link = match target with
+          | `Abs _ -> Path.Link (n, reified_abs_target)
+          | `Rel _ ->
+            Path.(Link (n, make_relative reified_abs_target ~from:p_abs))
+        in
+        Deferred.Or_error.return (Path.cons p_abs link)
       )
     | Error _ ->
       Deferred.Or_error.errorf
