@@ -314,6 +314,10 @@ let compare
   : type a b. (a,b) t -> (a,b) t -> int
   = fun p q -> compare (normalize p) (normalize q)
 
+module Infix = struct
+  let ( / ) = concat
+end
+
 module Make_relative = struct
 
   let rec skip_common_prefix

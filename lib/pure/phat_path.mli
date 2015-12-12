@@ -128,6 +128,10 @@ val resolve_any_kind : ('kind, 'typ) t -> 'typ of_any_kind
 
 val parent : ('kind, _) t -> ('kind, dir) t
 
+module Infix : sig
+  val ( / ) : ('kind, dir) t -> (rel, 'typ) t -> ('kind, 'typ) t
+end
+
 (**
 This function is useful when you have two absolute paths and want to
 have a relative path from one to the other.
