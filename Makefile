@@ -1,15 +1,15 @@
 PROJECT = phat
-LIBS = pure async_unix
-APPS = phat_tests
+LIBS = $(basename $(notdir $(wildcard lib/*.mlpack)))
+APPS = $(basename $(notdir $(wildcard app/*)))
 
 # Default targets to build for developers.
 default: byte project_files.stamp
 
-native: $(patsubst %,lib/$(PROJECT)_%.cmxa,$(LIBS)) \
-	$(patsubst %,lib/$(PROJECT)_%.cmxs,$(LIBS)) \
+native: $(patsubst %,lib/%.cmxa,$(LIBS)) \
+	$(patsubst %,lib/%.cmxs,$(LIBS)) \
 	$(patsubst %,app/%.native,$(APPS))
 
-byte: $(patsubst %,lib/$(PROJECT)_%.cma,$(LIBS)) \
+byte: $(patsubst %,lib/%.cma,$(LIBS)) \
 	$(patsubst %,app/%.byte,$(APPS))
 
 %.cma %.cmxa %.cmxs %.native %.byte:
