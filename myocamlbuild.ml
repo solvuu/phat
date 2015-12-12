@@ -309,12 +309,16 @@ end = struct
 
       make_static_file ".merlin" merlin_file;
       make_static_file "META" meta_file;
-      make_static_file "phat.install" install_file;
+      make_static_file (sprintf "%s.install" Project.name) install_file;
 
       rule "project files"
 	~stamp:"project_files.stamp"
 	(fun _ build ->
-	  let project_files = [[".merlin"]] in
+	  let project_files = [[
+	    ".merlin";
+	    sprintf "%s.install" Project.name;
+	  ]]
+	  in
 	  List.map (build project_files) ~f:Outcome.good
 	  |> List.map ~f:(fun result ->
 	    Cmd (S [A "ln"; A "-sf";
