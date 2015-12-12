@@ -611,3 +611,9 @@ let sexp_of_t p =
   sexp_of_t (fun _ -> assert false) (fun _ -> assert false) p
 
 let string_of_item x = (Elem.item_to_elem x :> string)
+
+let rec last_item
+  : type o. (rel, o) t -> (rel, o) item
+  = function
+    | Item i -> i
+    | Cons (_, rest) -> last_item rest

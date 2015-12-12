@@ -77,6 +77,7 @@ val dir_of_any_kind : string -> dir of_any_kind Or_error.t
 
 (** {2 Deconstructors} *)
 
+val last_item : (rel, 'o) t -> (rel, 'o) item
 val to_list : (_, _) t -> string list
 val to_string : (_, _) t -> string
 val sexp_of_t : (_, _) t -> Sexp.t
