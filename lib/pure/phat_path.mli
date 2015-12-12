@@ -51,6 +51,16 @@ val compare : ('kind,'typ) t -> ('kind,'typ) t -> int
 
 (** Unix root directory "/". *)
 val root : abs_dir
+val file : name -> rel_file
+val file_exn : string -> rel_file
+val dir : name -> rel_dir
+val dir_exn : string -> rel_dir
+val link : name -> (_,'o) t -> (rel, 'o) t
+val link_exn : string -> (_,'o) t -> (rel, 'o) t
+val dot : rel_dir
+val dotdot : rel_dir
+val broken_link : name -> string list -> (rel, link) t
+val broken_link_exn : string -> string list -> (rel, link) t
 
 (** Parse a name. *)
 val name : string -> name Or_error.t

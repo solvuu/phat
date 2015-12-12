@@ -565,6 +565,16 @@ open Elem
 (******************************************************************************)
 
 let root = Item Root
+let file n = Item (File n)
+let file_exn s = file (name_exn s)
+let dir n = Item (Dir n)
+let dir_exn s = dir (name_exn s)
+let link n p = Item (Link (n, p))
+let link_exn s p = link (name_exn s) p
+let dot = Item Dot
+let dotdot = Item Dotdot
+let broken_link n xs = Item (Broken_link (n, xs))
+let broken_link_exn s xs = broken_link (name_exn s) xs
 
 let cons x y = concat x (Item y)
 
