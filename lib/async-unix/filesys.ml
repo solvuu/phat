@@ -387,34 +387,29 @@ let rec fold_aux p_abs p_rel obj ~f ~init =
             return (`Dir (Path.Dir n))
 
           | `Link ->
-            reify_link subdir_as_str n
+            discover_link subdir subdir_as_str n
         )
         >>= fun item ->
         fold_aux p_abs (Path.cons p_rel subdir_item) item ~f ~init:accu
       )
 
-and reify_link dir_as_str n =
+and discover_link dir dir_as_str n =
   let link_as_str = Filename.concat dir_as_str (n : Path.name :> string) in
-  Unix.readlink link_as_str >>= fun target ->
-  try_with Unix.(fun () -> stat link_as_str) >>| function
+  try_with Unix.(fun () -> stat link_as_str) >>= function
   | Ok stats -> (
-      let make_link f cons =
-        match f target with (* parse target of the link *)
-        | Ok target ->
-          Path.map_any_kind target { Path.map = fun x ->
-              cons (Path.Link (n, x))
-            }
-        | Error _ ->
-          (* should not happen since the target exists
-                       according to the file system *)
-          assert false
+      let make_link item cons =
+        reify (Path.cons dir item) >>| ok_exn (* We could do a stat on the
+                                                 link, so reify has no reason to fail *)
+        >>| function
+        | Path.Item _ -> assert false
+        | Path.Cons (_, p_rel) -> cons (Path.last_item p_rel)
       in
       match stats.Unix.Stats.kind with
       | `File | `Block | `Char | `Fifo | `Socket ->
-        make_link Path.file_of_any_kind (fun x -> `File x)
+        make_link (Path.File n) (fun x -> `File x)
 
       | `Directory ->
-        make_link Path.dir_of_any_kind (fun x -> `Dir x)
+        make_link (Path.Dir  n) (fun x -> `Dir x)
 
       | `Link ->
         (* should not happen: Unix.stat resolves to a
@@ -422,6 +417,7 @@ and reify_link dir_as_str n =
         assert false
     )
   | Error _ ->
+    Unix.readlink link_as_str >>| fun target ->
     let bl = Path.Broken_link (n, String.split ~on:'/' target) in
     `Broken_link bl
 
