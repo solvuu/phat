@@ -362,14 +362,17 @@ and reify_link
 
 
 
-
+(* NB: the uses of normalize in the function on the relative paths
+   that are recursively built are safe wrt links. This is true because
+   relative paths created by [fold] never have ".." in it. This is
+   easy because we don't follow links. *)
 let rec fold_aux p_abs p_rel obj ~f ~init =
-  let dir = Path.(concat p_abs p_rel |> normalize) in
+  let dir = Path.(concat p_abs p_rel) in
   match obj with
-  | `File file -> f init (`File (Path.cons p_rel file))
-  | `Broken_link bl ->  f init (`Broken_link (Path.cons p_rel bl))
+  | `File file -> f init (`File (Path.cons p_rel file |> Path.normalize))
+  | `Broken_link bl ->  f init (`Broken_link Path.(cons p_rel bl |> normalize))
   | `Dir subdir_item ->
-    let subdir_rel = Path.cons p_rel subdir_item in
+    let subdir_rel = Path.(cons p_rel subdir_item |> normalize) in
     let subdir = Path.cons dir subdir_item in
     let subdir_as_str = Path.to_string subdir in
     f init (`Dir subdir_rel) >>= fun accu -> (* prefix traversal *)
