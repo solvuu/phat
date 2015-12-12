@@ -1,6 +1,6 @@
 PROJECT = phat
 LIBS = pure async_unix
-APPS = run_ounit_tests
+APPS = phat_tests
 
 # Default targets to build for developers.
 default: byte project_files.stamp
@@ -18,7 +18,7 @@ byte: $(patsubst %,lib/$(PROJECT)_%.cma,$(LIBS)) \
 project_files.stamp .merlin META $(PROJECT).install:
 	ocamlbuild $@
 
-test: app/run_ounit_tests.native
+tests: app/phat_tests.native
 	_build/$<
 
 clean:

@@ -347,7 +347,7 @@ include Make(struct
     };
 
     {
-      Info.name = `App "run_ounit_tests";
+      Info.name = `App "phat_tests";
       libs = ["async_unix"];
       pkgs = ["oUnit"];
     };
