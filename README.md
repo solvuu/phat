@@ -15,7 +15,7 @@ Async backend is fully developed, but future work will add support for
 Lwt and blocking APIs. Now take a look at the API documentation of
 [Path](https://github.com/solvuu/phat/blob/master/lib/pure/phat_path.mli)
 and
-[Filesys](https://github.com/solvuu/phat/blob/master/lib/async-unix/filesys.mli). Both
+[Filesys](https://github.com/solvuu/phat/blob/master/lib/async_unix/filesys.mli). Both
 modules are included in `Std`, so constructs therein are available
 directly. Also see below for a high level description of the main
 concepts.

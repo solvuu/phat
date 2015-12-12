@@ -1,3 +1,3 @@
-lib/async-unix/Filesys
-lib/async-unix/Phat_path
-lib/async-unix/Std
+lib/async_unix/Filesys
+lib/async_unix/Phat_path
+lib/async_unix/Std

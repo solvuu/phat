@@ -144,8 +144,6 @@ end = struct
     include ListLabels
   end
 
-  let dash_to_underscore x = String.map (function '-' -> '_' | c -> c) x
-
   let all_libs : string list =
     let found =
       Sys.readdir "lib" |> Array.to_list
@@ -174,8 +172,6 @@ end = struct
     assert (found=given);
     given
 
-  let lib_name lib = sprintf "%s-%s" Project.name lib
-
   let git_commit =
     if Sys.file_exists ".git" then
       sprintf "Some \"%s\""
@@ -194,7 +190,7 @@ end = struct
     @(List.map all_libs ~f:(fun x ->
       sprintf
 	"<lib/%s/*.cmx>: for-pack(%s_%s)"
-	x (String.capitalize Project.name) (dash_to_underscore x) )
+	x (String.capitalize Project.name) x )
     )
     @(
       let libs = (Info.libs Project.info :> Info.item list) in
@@ -239,7 +235,7 @@ end = struct
 
   let meta_file : string list =
     List.map all_libs ~f:(fun x ->
-      let lib_name = lib_name x in
+      let lib_name = sprintf "%s_%s" Project.name x in
       let requires : string list =
 	(Info.pkgs_all Project.info (`Lib x))
 	@(List.map
@@ -269,8 +265,8 @@ end = struct
     let lib_files =
       List.map all_libs ~f:(fun lib ->
 	List.map (fun suffix ->
-	  sprintf "  \"?_build/lib/%s.%s\""
-	    (lib_name lib |> dash_to_underscore) suffix
+	  sprintf "  \"?_build/lib/%s_%s.%s\""
+	    Project.name lib suffix
 	) suffixes
       )
       |> List.flatten
@@ -345,14 +341,14 @@ include Make(struct
     };
 
     {
-      Info.name = `Lib "async-unix";
+      Info.name = `Lib "async_unix";
       libs = ["pure"];
       pkgs = ["async"];
     };
 
     {
       Info.name = `App "run_ounit_tests";
-      libs = ["async-unix"];
+      libs = ["async_unix"];
       pkgs = ["oUnit"];
     };
   ]
