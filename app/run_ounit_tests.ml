@@ -323,10 +323,26 @@ let create_test_directory path =
   Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux") >>= fun () ->
   Unix.symlink ~src:"foo/bar/booz" ~dst:(f "broken")
 
+type path_wrapper = PW : (Phat.rel,_) Phat.t -> path_wrapper
+
+let test_directory_description =
+  let open Phat in
+  let open Phat.Infix in
+  let foo = dir_exn "foo" in
+  let foo_bar = foo / dir_exn "bar" in
+  let foo_bar_baz = foo_bar / file_exn "baz" in
+  let qux = link_exn "qux" foo_bar_baz in
+  let broken = broken_link_exn "broken" ["foo" ; "bar" ; "booz" ]
+  in
+  [ PW foo ; PW foo_bar ; PW foo_bar_baz ; PW qux ; PW broken ]
+
+
 let filesys_exists ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  let check p =
+  let check
+    : type o. (Phat.rel, o) Phat.t -> unit Deferred.t
+    = fun p ->
     Phat.exists (Phat.concat tmpdir_path p) >>| function
     | `Yes -> ()
     | `Yes_modulo_links
@@ -340,17 +356,8 @@ let filesys_exists ctx =
        in
        assert_failure msg
   in
-  let foo = Phat.(Item (Dir (name_exn "foo"))) in
-  let foo_bar = Phat.(cons foo (Dir (name_exn "bar"))) in
-  let foo_bar_baz = Phat.(cons foo_bar (File (name_exn "baz"))) in
-  let qux = Phat.(Item (Link (name_exn "qux", foo_bar_baz))) in
-  let broken = Phat.(Item (Broken_link (name_exn "broken", ["foo" ; "bar" ; "booz" ]))) in
   create_test_directory tmpdir >>= fun () ->
-  check foo >>= fun () ->
-  check foo_bar >>= fun () ->
-  check foo_bar_baz >>= fun () ->
-  check qux >>= fun () ->
-  check broken
+  Deferred.List.iter test_directory_description ~f:(function PW p -> check p)
 
 let filesys_exists_modulo_links ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
@@ -485,30 +492,22 @@ let filesys_mkdir ctx =
     )
 
 let fold_works_on_test_directory ctx =
-  let expected = List.sort ~cmp:compare [
-    "(Cons Dot(Item Dot))" ;
-    "(Cons Dot(Cons Dot(Item(Broken_link broken(foo bar booz)))))" ;
-    "(Cons Dot(Cons Dot(Item(Dir foo))))" ;
-    "(Cons Dot(Cons Dot(Cons(Dir foo)(Item(Dir bar)))))" ;
-    "(Cons Dot(Cons Dot(Cons(Dir foo)(Cons(Dir bar)(Item(File baz))))))" ;
-    "(Cons Dot(Cons Dot(Item(Link qux(Cons(Dir foo)(Cons(Dir bar)(Item(File baz))))))))" ;
-  ]
-  in
+  let expected = List.sort ~cmp:compare (PW Phat.dot :: test_directory_description) in
   let tmpdir_as_str = OUnit2.bracket_tmpdir ctx in
   let tmpdir = ok_exn (Phat.abs_dir tmpdir_as_str) in
-  let str_of_elt =
-    let f x = Sexp.to_string (Phat.sexp_of_t x) in
+  let pw_of_elt =
     function
-    | `File file -> f file
-    | `Dir d -> f d
-    | `Broken_link bl -> f bl
+    | `File file -> PW file
+    | `Dir d -> PW d
+    | `Broken_link bl -> PW bl
   in
+  let to_string (PW p) = Phat.to_string p in
   create_test_directory tmpdir_as_str >>= fun () ->
   Phat.fold tmpdir ~init:[] ~f:(fun accu elt ->
-      return ((str_of_elt elt) :: accu)
+      return ((pw_of_elt elt) :: accu)
     )
   >>| function
-  | Ok l -> assert_equal ~printer:(List.to_string ~f:ident) expected (List.sort ~cmp:compare l)
+  | Ok l -> assert_equal ~printer:(List.to_string ~f:to_string) expected (List.sort ~cmp:compare l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
 
