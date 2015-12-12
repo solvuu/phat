@@ -355,7 +355,7 @@ let filesys_exists ctx =
 let filesys_exists_modulo_links ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  deferred_repeat 1000 ~f:(fun _ ->
+  deferred_repeat 100 ~f:(fun _ ->
       Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir) >>= fun () ->
       let p = R.abs_dir_path ~link_level:4 ~root:tmpdir_path () in
       (
@@ -406,7 +406,7 @@ let filesys_exists_modulo_links ctx =
 let filesys_exists_as_other_object ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  deferred_repeat 1000 ~f:(fun _ ->
+  deferred_repeat 100 ~f:(fun _ ->
       Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir) >>= fun () ->
       let p = (* This is needed to be sure the string representation of the dir can be parsed as a file *)
         Phat.(
@@ -455,7 +455,7 @@ let filesys_exists_as_other_object ctx =
 let filesys_mkdir ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  deferred_repeat 1000 ~f:(fun _ ->
+  deferred_repeat 100 ~f:(fun _ ->
       Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir) >>= fun () ->
       let p = R.abs_dir_path ~root:tmpdir_path ~link_level:4 () in
       Phat.mkdir p >>= function
@@ -515,7 +515,7 @@ let fold_works_on_test_directory ctx =
 let reify_directory ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  deferred_repeat 1000 ~f:(fun i ->
+  deferred_repeat 100 ~f:(fun i ->
       Process.run ~prog:"rm" ~args:[ "-rf" ; tmpdir ] () >>| ok_exn >>= fun _ ->
       let p =
         NR.abs_dir_path ~link_level:4 ~root:tmpdir_path ()
