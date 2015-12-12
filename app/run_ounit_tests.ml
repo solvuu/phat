@@ -51,12 +51,64 @@ let new_name =
     |> ok_exn
 
 
-(* A module to generate random path
+(* A module to generate normalized random paths *)
+module NR = struct
+  let rec rel_dir_item ?(no_dot = false) ~link_level ~root ~level () =
+    let bottom = level <= 0 in
+    let no_link = link_level <= 0 in
+    if Random.bool () then
+      Phat.Dir (new_name ())
+    else if Random.bool () && not no_link then
+      Phat.map_any_kind
+        (dir_path ~link_level:(link_level - 1) ~root ~level ())
+        { Phat.map = fun p -> Phat.Link (new_name (), p) }
+    else if not bottom && not no_dot && Random.bool () then
+      Phat.Dotdot
+    else
+      rel_dir_item ~no_dot ~link_level ~root ~level ()
 
-   The level argument is used to make sure we don't add too many
-   Dotdot in the path. This is useful if generated paths must lie in
-   some directory The link_level argument is there to limit the number
-   of link indirections. *)
+  and rel_file_item ~link_level ~root ~level () =
+    let no_link = link_level <= 0 in
+    if no_link || Random.float 1. > 0.1 then
+      Phat.File (new_name ())
+    else (
+      Phat.map_any_kind
+        (file_path ~link_level:(link_level - 1) ~root ~level ())
+        { Phat.map = fun p -> Phat.Link (new_name (), p) }
+    )
+
+  and dir_path ~link_level ~root ~level () =
+    match Random.bool () with
+    | true -> `Abs (abs_dir_path ~link_level ~root ())
+    | false -> `Rel (rel_dir_path ~link_level ~root ~level ())
+
+  and file_path ~link_level ~root ~level () =
+    match Random.bool () with
+    | true -> `Abs (abs_file_path ~link_level ~root ())
+    | false -> `Rel (rel_file_path ~link_level ~root ~level ())
+
+  and abs_dir_path ~link_level ?(root = Phat.root) () =
+    Phat.concat root (rel_dir_path ~link_level ~root ~level:0 ())
+
+  and rel_dir_path ?(no_dot = false) ~link_level ~root ~level () =
+    let d = rel_dir_item ~no_dot ~link_level ~root ~level () in
+    if Random.float 1. < 0.6 then
+      let no_dot = no_dot || d <> Phat.Dotdot in
+      let level = update_level_item ~root level d in
+      Phat.Cons (d, rel_dir_path ~no_dot ~link_level ~root ~level ())
+    else
+      Phat.Item d
+
+  and abs_file_path ~link_level ?(root = Phat.root) () =
+    Phat.concat root (rel_file_path ~link_level ~root ~level:0 ())
+
+  and rel_file_path ~link_level ~root ~level () =
+    Phat.concat
+      (rel_dir_path ~link_level ~root ~level ())
+      (Phat.Item (rel_file_item ~link_level ~root ~level ()))
+end
+
+
 module R = struct
   let rec rel_dir_item ~link_level ~root ~level () =
     let bottom = level <= 0 in
@@ -466,8 +518,7 @@ let reify_directory ctx =
   deferred_repeat 1000 ~f:(fun i ->
       Process.run ~prog:"rm" ~args:[ "-rf" ; tmpdir ] () >>| ok_exn >>= fun _ ->
       let p =
-        R.rel_dir_path ~link_level:4 ~root:tmpdir_path ~level:0 ()
-        |> Phat.concat tmpdir_path
+        NR.abs_dir_path ~link_level:4 ~root:tmpdir_path ()
       in
       let p_str = Phat.to_string p in
       Phat.mkdir p >>= function
@@ -507,5 +558,5 @@ let suite = "Phat test suite" >::: [
     "Reify directory" >::= reify_directory ;
   ]
 
-let () = Random.init 420
+let () = Random.init 42
 let () = run_test_tt_main suite
