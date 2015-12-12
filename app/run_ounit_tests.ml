@@ -525,12 +525,12 @@ let reify_directory ctx =
       | Ok () -> (
           Phat.abs_dir p_str |> ok_exn |> Phat.reify >>= function
           | Ok q -> (
-              Phat.exists q >>= function
-              | `Yes -> return ()
-              | `Yes_modulo_links | `Yes_as_other_object | `No | `Unknown ->
+              if p <> q then (
                 Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
                 let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n\n%s\n" stdout (string_hum_of_path p) (string_hum_of_path q) in
                 assert_failure msg
+              )
+              else return ()
             )
           | Error e ->
             Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>= fun stdout ->
