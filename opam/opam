@@ -9,13 +9,19 @@ bug-reports: "https://github.com/solvuu/phat/issues"
 license: "ISC"
 tags: ["org:solvuu"]
 
-build: ["omake" "-j1"]
+build: [
+  [make "native"]
+  [make "byte"]
+]
 
-install: ["omake" "%{name}%.install"]
+install: [
+  [make "META"]
+  [make "%{name}%.install"]
+]
 
 depends: [
   "ocamlfind" {build}
-  "omake" {build}
+  "ocamlbuild" {build}
   "ounit" {test}
   "core" {>= "111.13.00"}
   "async"
