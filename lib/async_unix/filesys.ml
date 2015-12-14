@@ -38,41 +38,58 @@ let and_check f x e =
   | `Unknown -> return `Unknown
 
 
-(** Async's [file_exists] has a
-    {{:https://github.com/janestreet/async_unix/issues/6}bug} that
-    doesn't allow setting follow_symlinks to false. *)
-let file_exists x =
-  In_thread.run (fun () -> Core.Std.Sys.file_exists ~follow_symlinks:false x)
+module U = struct
 
-let is_file x = Sys.is_file ~follow_symlinks:false x
-let is_directory x = Sys.is_directory ~follow_symlinks:false x
+  let wrap loc f =
+    try_with f >>|
+    Or_error.of_exn_result >>|
+    Or_error.tag_loc loc
 
-let is_link p =
-  file_exists p >>= function
-  | `No
-  | `Unknown as x ->
-    return x
-  | `Yes ->
-    Unix.lstat p >>| fun {Unix.Stats.kind; _} ->
-    match kind with
-    | `Link ->
-      `Yes
-    | `File | `Directory | `Char | `Block | `Fifo | `Socket ->
-      `No
+  (** Async's [file_exists] has a
+      {{:https://github.com/janestreet/async_unix/issues/6}bug} that
+      doesn't allow setting follow_symlinks to false. *)
+  let file_exists x =
+    In_thread.run (fun () -> Core.Std.Sys.file_exists ~follow_symlinks:false x)
+
+  let is_file x = Sys.is_file ~follow_symlinks:false x
+  let is_directory x = Sys.is_directory ~follow_symlinks:false x
+
+  let is_link p =
+    file_exists p >>= function
+    | `No
+    | `Unknown as x ->
+      return x
+    | `Yes ->
+      Unix.lstat p >>| fun {Unix.Stats.kind; _} ->
+      match kind with
+      | `Link ->
+        `Yes
+      | `File | `Directory | `Char | `Block | `Fifo | `Socket ->
+        `No
+
+
+  let mkdir p =
+    wrap _here_ (fun () -> Unix.mkdir p)
+
+  let symlink link_path ~targets:link_target =
+    wrap _here_ (fun () ->
+        Unix.symlink ~dst:link_path ~src:link_target
+      )
+end
 
 
 let exists_as_file p =
-  file_exists p >>= function
+  U.file_exists p >>= function
   | `No | `Unknown as x -> return x
   | `Yes -> (
-      is_file p >>= function
+      U.is_file p >>= function
       | `Yes | `Unknown as x -> return x
       | `No -> (
-          is_directory p >>= function
+          U.is_directory p >>= function
           | `Yes -> return `Yes_as_other_object
           | `Unknown -> return `Unknown
           | `No -> (
-              is_link p >>= function
+              U.is_link p >>= function
               | `No -> return `Yes_as_other_object
               | `Unknown -> return `Unknown
               | `Yes -> (
@@ -85,17 +102,17 @@ let exists_as_file p =
     )
 
 let exists_as_directory p =
-  file_exists p >>= function
+  U.file_exists p >>= function
   | `No | `Unknown as x -> return x
   | `Yes -> (
-      is_directory p >>= function
+      U.is_directory p >>= function
       | `Yes | `Unknown as x -> return x
       | `No -> (
-          is_file p >>= function
+          U.is_file p >>= function
           | `Yes -> return `Yes_as_other_object
           | `Unknown -> return `Unknown
           | `No -> (
-              is_link p >>= function
+              U.is_link p >>= function
               | `No -> return `Yes_as_other_object
               | `Unknown -> return `Unknown
               | `Yes -> (
@@ -109,10 +126,10 @@ let exists_as_directory p =
 
 
 let exists_as_link p target =
-  file_exists p >>= function
+  U.file_exists p >>= function
   | `No | `Unknown as x -> return x
   | `Yes -> (
-      is_link p >>= function
+      U.is_link p >>= function
       | `No -> return `Yes_as_other_object
       | `Unknown -> return `Unknown
       | `Yes ->
@@ -126,9 +143,9 @@ let rec exists
   =
   let open Path in
   function
-  | Item Root -> (file_exists "/" :> exists_answer Deferred.t)
+  | Item Root -> (U.file_exists "/" :> exists_answer Deferred.t)
   | Cons (Root, p_rel) ->
-    file_exists "/"
+    U.file_exists "/"
     >>| exists_answer
     >>= and_check (exists_rel_path root) p_rel
 
@@ -146,7 +163,7 @@ and exists_item
     | Path.Broken_link (_, target) ->
       let target_does_not_exist target =
         let target_as_str = Filename.of_parts target in
-        file_exists (
+        U.file_exists (
           match target with
           | "/" :: _ -> target_as_str
           | _ -> Filename.concat (Path.to_string p_abs) target_as_str
@@ -183,19 +200,6 @@ let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   Or_error.of_exn_result >>|
   Or_error.tag_loc _here_
 
-let wrap_unix loc f =
-  try_with f >>|
-  Or_error.of_exn_result >>|
-  Or_error.tag_loc loc
-
-let unix_mkdir p =
-  wrap_unix _here_ (fun () -> Unix.mkdir (Path.to_string p))
-
-let unix_symlink link_path ~targets:link_target =
-  wrap_unix _here_ (fun () ->
-      Unix.symlink ~dst:(Path.to_string link_path) ~src:(Path.to_string link_target)
-    )
-
 let rec mkdir
   : Path.abs_dir -> unit Or_error.t Deferred.t
   = fun p ->
@@ -213,7 +217,7 @@ and mkdir_aux
       | `Yes_as_other_object ->
         let msg = sprintf "Path %s already exists and is not a directory" (Path.to_string p) in
         DOR.error_string msg
-      | `No -> unix_mkdir p
+      | `No -> U.mkdir (Path.to_string p)
       | `Unknown ->
         let msg = sprintf "Insufficient permissions to create %s" (Path.to_string p) in
         DOR.error_string msg
@@ -227,7 +231,7 @@ and mkdir_aux
     | Path.Item Path.Dotdot -> return (Ok ())
     | Path.Item (Path.Link (_, dir)) -> (
         let p = Path.concat p_abs p_rel in
-        unix_symlink p ~targets:dir >>=? fun () ->
+        U.symlink (Path.to_string p) ~targets:(Path.to_string dir) >>=? fun () ->
         match Path.kind_of dir with
         | `Rel dir -> mkdir_aux p_abs dir
         | `Abs dir -> mkdir dir
@@ -238,7 +242,7 @@ and mkdir_aux
         mkdir_aux p_abs' p_rel'
       )
     | Path.Cons (Path.Link (_, dir) as l, p_rel') -> (
-        unix_symlink (Path.cons p_abs l) ~targets:dir >>=? fun () ->
+        U.symlink Path.(to_string (cons p_abs l)) ~targets:(Path.to_string dir) >>=? fun () ->
         match Path.kind_of dir with
         | `Rel dir ->
           mkdir_aux p_abs (Path.concat dir p_rel')
@@ -297,13 +301,13 @@ and reify_aux_item
     let p_str = Path.to_string p in
     match item with
     | Path.File n -> (
-        is_link p_str >>= function
+        U.is_link p_str >>= function
         | `Yes -> reify_link Path.file_of_any_kind p_abs n p_str
         | `No ->  Deferred.Or_error.return p
         | `Unknown -> assert false (* [EXIST] *)
       )
     | Path.Dir n -> (
-        is_link p_str >>= function
+        U.is_link p_str >>= function
         | `Yes -> reify_link Path.dir_of_any_kind p_abs n p_str
         | `No ->  Deferred.Or_error.return p
         | `Unknown -> assert false (* [EXIST] *)
