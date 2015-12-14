@@ -75,6 +75,12 @@ module U = struct
     wrap _here_ (fun () ->
         Unix.symlink ~dst:link_path ~src:link_target
       )
+
+  let realpath x =
+    wrap _here_ (fun () ->
+        In_thread.run (fun () -> Filename.realpath x)
+      )
+
 end
 
 
