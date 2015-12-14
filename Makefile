@@ -1,8 +1,10 @@
-PROJECT = phat
+PROJECT=$(shell grep "^name" opam/opam | cut -d\" -f2)
 LIBS = $(basename $(notdir $(wildcard lib/*.mlpack)))
 APPS = $(basename $(notdir $(wildcard app/*)))
 
-# Default targets to build for developers.
+OCAMLBUILD=ocamlbuild -use-ocamlfind \
+           -plugin-tag "package(opam-lib)"
+
 default: byte project_files.stamp
 
 native: $(patsubst %,lib/%.cmxa,$(LIBS)) \
@@ -13,18 +15,15 @@ byte: $(patsubst %,lib/%.cma,$(LIBS)) \
 	$(patsubst %,app/%.byte,$(APPS))
 
 %.cma %.cmxa %.cmxs %.native %.byte:
-	ocamlbuild $@
+	$(OCAMLBUILD) $@
 
 project_files.stamp META:
-	ocamlbuild $@
+	$(OCAMLBUILD) $@
 
 .merlin $(PROJECT).install:
-	ocamlbuild $@ && ln -s _build/$@ $@
-
-tests: app/phat_tests.native
-	_build/$<
+	$(OCAMLBUILD) $@ && ln -s _build/$@ $@
 
 clean:
-	ocamlbuild -clean
+	$(OCAMLBUILD) -clean
 
-.PHONY: default all native byte clean test
+.PHONY: default native byte clean

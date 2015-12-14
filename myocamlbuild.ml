@@ -7,7 +7,6 @@ module List = struct
   include ListLabels
 end
 
-(** Information about a library or app provided by this project. *)
 module Info : sig
 
   (** Library or app name. *)
@@ -16,13 +15,14 @@ module Info : sig
   type item = {
     name : name;
 
-    (** Internal libraries this library or app directly depends on. *)
     libs : string list;
+    (** Internal libraries this library or app directly depends on. *)
 
-    (** Additional ocamlfind packages this library or app depends
-	on. By "additional", we mean it is not necessary to list packages
-	that are already listed for one of this item's [libs]. *)
     pkgs : string list;
+    (** Additional ocamlfind packages this library or app depends
+	on. By "additional", we mean it is not necessary to list
+	packages that are already listed for one of this item's
+	[libs]. *)
   }
 
   type t = private item list
@@ -128,15 +128,25 @@ end = struct
 end
 
 module type PROJECT = sig
-  val name : string
-  val version : string
   val info : Info.t
 end
 
 module Make(Project:PROJECT) : sig
+  val project_name : string
+  val project_version : string
   val dispatch : unit -> unit
 end = struct
   open Ocamlbuild_plugin
+
+  let opam : OpamFile.OPAM.t =
+    OpamFile.OPAM.read @@ OpamFilename.(
+      create (Dir.of_string "opam") (Base.of_string "opam") )
+
+  let project_name =
+    opam |> OpamFile.OPAM.name |> OpamPackage.Name.to_string
+
+  let project_version =
+    opam |> OpamFile.OPAM.version |> OpamPackage.Version.to_string
 
   (* override the one from Ocamlbuild_plugin *)
   module List = struct
@@ -190,7 +200,7 @@ end = struct
     @(List.map all_libs ~f:(fun x ->
       sprintf
 	"<lib/%s/*.cmx>: for-pack(%s_%s)"
-	x (String.capitalize Project.name) x )
+	x (String.capitalize project_name) x )
     )
     @(
       let libs = (Info.libs Project.info :> Info.item list) in
@@ -235,17 +245,17 @@ end = struct
 
   let meta_file : string list =
     List.map all_libs ~f:(fun x ->
-      let lib_name = sprintf "%s_%s" Project.name x in
+      let lib_name = sprintf "%s_%s" project_name x in
       let requires : string list =
 	(Info.pkgs_all Project.info (`Lib x))
 	@(List.map
-	    (sprintf "%s.%s" Project.name)
 	    (Info.libs_direct Project.info (`Lib x))
+	    ~f:(sprintf "%s.%s" project_name)
 	)
       in
       [
 	sprintf "package \"%s\" (" x;
-	sprintf "  version = \"%s\"" Project.version;
+	sprintf "  version = \"%s\"" project_version;
 	sprintf "  archive(byte) = \"%s.cma\"" lib_name;
 	sprintf "  archive(native) = \"%s.cmxa\"" lib_name;
 	sprintf "  requires = \"%s\"" (String.concat " " requires);
@@ -264,19 +274,19 @@ end = struct
     in
     let lib_files =
       List.map all_libs ~f:(fun lib ->
-	List.map (fun suffix ->
+	List.map suffixes ~f:(fun suffix ->
 	  sprintf "  \"?_build/lib/%s_%s.%s\""
-	    Project.name lib suffix
-	) suffixes
+	    project_name lib suffix
+	)
       )
       |> List.flatten
       |> fun l -> "  \"_build/META\""::l
     in
     let app_files =
       List.map all_apps ~f:(fun app ->
-	List.map (fun suffix ->
+	List.map ["byte"; "native"] ~f:(fun suffix ->
 	  sprintf "  \"?_build/app/%s.%s\" {\"%s\"}" app suffix app
-	) ["byte"; "native"]
+	)
       )
       |> List.flatten
     in
@@ -299,7 +309,7 @@ end = struct
 	  let ml_m4 = env "%.ml.m4" in
 	  Cmd (S [
 	    A "m4";
-	    A "-D"; A ("VERSION=" ^ Project.version);
+	    A "-D"; A ("VERSION=" ^ project_version);
             A "-D"; A ("GIT_COMMIT=" ^ git_commit);
 	    P ml_m4;
 	    Sh ">";
@@ -309,14 +319,14 @@ end = struct
 
       make_static_file ".merlin" merlin_file;
       make_static_file "META" meta_file;
-      make_static_file (sprintf "%s.install" Project.name) install_file;
+      make_static_file (sprintf "%s.install" project_name) install_file;
 
       rule "project files"
 	~stamp:"project_files.stamp"
 	(fun _ build ->
 	  let project_files = [[
 	    ".merlin";
-	    sprintf "%s.install" Project.name;
+	    sprintf "%s.install" project_name;
 	  ]]
 	  in
 	  List.map (build project_files) ~f:Outcome.good
@@ -334,9 +344,6 @@ end = struct
 end
 
 include Make(struct
-  let name = "phat"
-  let version = "dev"
-
   let info = Info.of_list [
     {
       Info.name = `Lib "pure";
