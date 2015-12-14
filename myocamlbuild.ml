@@ -362,6 +362,12 @@ include Make(struct
       libs = ["async_unix"];
       pkgs = ["oUnit"];
     };
+
+    {
+      Info.name = `App "phat";
+      libs = ["async_unix"];
+      pkgs = [];
+    };
   ]
 
 end)
