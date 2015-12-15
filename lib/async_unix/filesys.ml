@@ -472,74 +472,73 @@ end
    PRECONDITIONS:
    - [obj] refers to an existing object
  *)
-let rec fold_follows_links_aux visited resolved_visited obj ~f ~(init:'a) : ('a * WPS.t * WPS.t) Deferred.Or_error.t =
-  let realpath parse p =
-    let p_str = Path.to_string p in
-    U.realpath p_str >>=? fun resolved_p_str ->
-    return (parse resolved_p_str)
+let rec fold_follows_links_aux visited obj ~f ~(init:'a) : ('a * WPS.t) Deferred.Or_error.t =
+  let realpath
+    : type o. (Path.abs, o) Path.t -> (Path.abs, o) Path.t DOR.t
+    = fun p ->
+      let p_str = Path.to_string p in
+      match p with
+      | Path.Cons (Path.Root, p_rel) ->
+        let p_item = Path.last_item p_rel in
+        U.realpath (Filename.dirname p_str) >>=? fun resolved_parent_str ->
+        return (Path.abs_dir resolved_parent_str) >>=? fun resolved_parent ->
+        DOR.return (Path.cons resolved_parent p_item)
+      | Path.Item Path.Root -> DOR.return p
   in
-  let realpath_bl bl =
-    let bl_str = Path.to_string bl in
-    let bl_item = match bl with
-      | Path.Cons (Path.Root, p_rel) -> Path.last_item p_rel
-      | Path.Item _ -> assert false
-    in
-    U.realpath (Filename.dirname bl_str) >>=? fun resolved_parent_str ->
-    return (Path.abs_dir resolved_parent_str) >>=? fun resolved_parent ->
-    DOR.return (Path.cons resolved_parent bl_item)
-  in
-  let visit realpath cons obj p =
+  let visit cons p k =
     realpath p >>=? fun resolved_p ->
-    let already_visited = WPS.mem resolved_visited resolved_p in
-    f init (cons (p, resolved_p, already_visited)) >>= fun result ->
-    let visited' = WPS.add_obj visited obj in
-    let resolved_visited' = WPS.add resolved_visited resolved_p in
-    Deferred.Or_error.return (result, visited', resolved_visited')
+    if WPS.mem visited resolved_p then
+      Deferred.Or_error.return (init, visited)
+    else (
+      f init (cons (p, resolved_p)) >>= fun result ->
+      let visited' = WPS.add visited resolved_p in
+      k (result, visited')
+    )
   in
-  if WPS.mem_obj visited obj then Deferred.Or_error.return (init, visited, resolved_visited) else (
-    match obj with
-    | `File file ->
-      visit (realpath Path.abs_file) (fun x -> `File x) obj file
+  match obj with
+  | `File file ->
+    visit (fun x -> `File x) file DOR.return
 
-    | `Dir dir ->
-      visit (realpath Path.abs_dir) (fun x -> `Dir x) obj dir >>=? fun init ->
-      let dir_str = Path.to_string dir in
+  | `Dir dir ->
+    visit (fun x -> `Dir x) dir (fun init ->
+        let dir_str = Path.to_string dir in
 
-      Sys.readdir dir_str >>| Array.to_list >>= fun dir_contents ->
-      Deferred.Or_error.List.fold dir_contents ~init ~f:(fun (accu, visited, resolved_visited) obj ->
-          let obj_as_str = Filename.concat dir_str obj in
-          let n = Path.name_exn obj in (* the objects exists, so it has a legal name *)
-          Unix.(lstat obj_as_str) >>= fun stats ->
-          match stats.Unix.Stats.kind with
-          | `File | `Block | `Char | `Fifo | `Socket ->
-            let next_obj = `File (Path.cons dir (Path.File n)) in
-            fold_follows_links_aux visited resolved_visited next_obj ~f ~init:accu
+        Sys.readdir dir_str >>| Array.to_list >>= fun dir_contents ->
+        Deferred.Or_error.List.fold dir_contents ~init ~f:(fun (accu, visited) obj ->
+            let obj_as_str = Filename.concat dir_str obj in
+            let n = Path.name_exn obj in (* the objects exists, so it has a legal name *)
+            Unix.(lstat obj_as_str) >>= fun stats ->
+            match stats.Unix.Stats.kind with
+            | `File | `Block | `Char | `Fifo | `Socket ->
+              let next_obj = `File (Path.cons dir (Path.File n)) in
+              fold_follows_links_aux visited next_obj ~f ~init:accu
 
-          | `Directory ->
-            let next_obj = `Dir (Path.cons dir (Path.Dir n)) in
-            fold_follows_links_aux visited resolved_visited next_obj ~f ~init:accu
+            | `Directory ->
+              let next_obj = `Dir (Path.cons dir (Path.Dir n)) in
+              fold_follows_links_aux visited next_obj ~f ~init:accu
 
-          | `Link ->
-            discover_link dir dir_str n >>| (function
-                | `File f -> `File (Path.cons dir f)
-                | `Dir d -> `Dir (Path.cons dir d)
-                | `Broken_link bl -> `Broken_link (Path.cons dir bl)
-              )
+            | `Link ->
+              discover_link dir dir_str n >>| (function
+                  | `File f -> `File (Path.cons dir f)
+                  | `Dir d ->
+                    `Dir (Path.cons dir d)
+                  | `Broken_link bl -> `Broken_link (Path.cons dir bl)
+                )
               >>= fun next_obj ->
-            fold_follows_links_aux visited resolved_visited next_obj ~f ~init:accu
-        )
+              fold_follows_links_aux visited next_obj ~f ~init:accu
+          )
+      )
 
     | `Broken_link (bl : (Path.abs, Path.link) Path.t) ->
-      visit realpath_bl (fun x -> `Broken_link x) obj bl
-  )
+      visit (fun x -> `Broken_link x) bl DOR.return
 
 
 
 let fold_follows_links start ~f ~init =
   exists start >>= function
   | `Yes | `Yes_modulo_links -> (
-      fold_follows_links_aux WPS.empty WPS.empty (`Dir start)  ~f ~init >>| function
-      | Ok (r, _, _) -> Ok r
+      fold_follows_links_aux WPS.empty (`Dir start)  ~f ~init >>| function
+      | Ok (r, _) -> Ok r
       | Error e -> Error e
     )
 
