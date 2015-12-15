@@ -443,3 +443,108 @@ let fold start ~f ~init =
   | `No | `Unknown | `Yes_as_other_object ->
     errorh _here_ "Directory does not exist" () sexp_of_unit
     |> return
+
+
+module Wrapped_path = struct
+  type t = P : (_,_) Path.t -> t
+  let compare = Pervasives.compare
+  let t_of_sexp _ = assert false
+  let sexp_of_t _ = assert false
+end
+
+(* wrapped path set *)
+module WPS = struct
+  open Wrapped_path
+  include Set.Make(Wrapped_path)
+  let add set p = add set (P p)
+  let add_obj set = function
+      `File file -> add set file
+    | `Dir dir -> add set dir
+    | `Broken_link bl -> add set bl
+  let mem set p = mem set (P p)
+  let mem_obj set = function
+      `File file -> mem set file
+    | `Dir dir -> mem set dir
+    | `Broken_link bl -> mem set bl
+end
+
+(*
+   PRECONDITIONS:
+   - [obj] refers to an existing object
+ *)
+let rec fold_follows_links_aux visited resolved_visited obj ~f ~(init:'a) : ('a * WPS.t * WPS.t) Deferred.Or_error.t =
+  if WPS.mem_obj visited obj then Deferred.Or_error.return (init, visited, resolved_visited) else (
+    match obj with
+    | `File file ->
+      let file_str = Path.to_string file in
+      U.realpath file_str >>=? fun resolved_file_str ->
+      return (Path.abs_file resolved_file_str) >>=? fun resolved_file ->
+      let already_visited = WPS.mem resolved_visited resolved_file in
+      f init (`File (file, resolved_file, already_visited)) >>= fun result ->
+      let visited' = WPS.add_obj visited obj in
+      let resolved_visited' = WPS.add resolved_visited resolved_file in
+      Deferred.Or_error.return (result, visited', resolved_visited')
+
+    | `Dir dir ->
+      let dir_str = Path.to_string dir in
+      U.realpath dir_str >>=? fun resolved_dir_str ->
+      return (Path.abs_dir resolved_dir_str) >>=? fun resolved_dir ->
+      let already_visited = WPS.mem resolved_visited resolved_dir in
+      f init (`Dir (dir, resolved_dir, already_visited)) >>= fun result ->
+      let visited' = WPS.add_obj visited obj in
+      let resolved_visited' = WPS.add resolved_visited resolved_dir in
+
+      Sys.readdir dir_str >>| Array.to_list >>= fun dir_contents ->
+      let init = result, visited', resolved_visited' in
+      Deferred.Or_error.List.fold dir_contents ~init ~f:(fun (accu, visited, resolved_visited) obj ->
+          let obj_as_str = Filename.concat dir_str obj in
+          let n = Path.name_exn obj in (* the objects exists, so it has a legal name *)
+          Unix.(lstat obj_as_str) >>= fun stats ->
+          match stats.Unix.Stats.kind with
+          | `File | `Block | `Char | `Fifo | `Socket ->
+            let next_obj = `File (Path.cons dir (Path.File n)) in
+            fold_follows_links_aux visited resolved_visited next_obj ~f ~init:accu
+
+          | `Directory ->
+            let next_obj = `Dir (Path.cons dir (Path.Dir n)) in
+            fold_follows_links_aux visited resolved_visited next_obj ~f ~init:accu
+
+          | `Link ->
+            discover_link dir dir_str n >>| (function
+                | `File f -> `File (Path.cons dir f)
+                | `Dir d -> `Dir (Path.cons dir d)
+                | `Broken_link bl -> `Broken_link (Path.cons dir bl)
+              )
+              >>= fun next_obj ->
+            fold_follows_links_aux visited resolved_visited next_obj ~f ~init:accu
+        )
+
+    | `Broken_link (bl : (Path.abs, Path.link) Path.t) ->
+      let bl_str = Path.to_string bl in
+      let bl_item = match bl with
+        | Path.Cons (Path.Root, p_rel) -> Path.last_item p_rel
+        | Path.Item _ -> assert false
+      in
+      U.realpath (Filename.dirname bl_str) >>=? fun resolved_parent_str ->
+      return (Path.abs_dir resolved_parent_str) >>=? fun resolved_parent ->
+      let resolved_bl = Path.cons resolved_parent bl_item in
+      let already_visited = WPS.mem resolved_visited resolved_bl in
+      f init (`Broken_link (bl, resolved_bl, already_visited)) >>= fun result ->
+      let visited' = WPS.add_obj visited obj in
+      let resolved_visited' = WPS.add resolved_visited resolved_bl in
+      Deferred.Or_error.return (result, visited', resolved_visited')
+  )
+
+
+
+let fold_follows_links start ~f ~init =
+  exists start >>= function
+  | `Yes | `Yes_modulo_links -> (
+      fold_follows_links_aux WPS.empty WPS.empty (`Dir start)  ~f ~init >>| function
+      | Ok (r, _, _) -> Ok r
+      | Error e -> Error e
+    )
+
+  | `No | `Unknown | `Yes_as_other_object ->
+    errorh _here_ "Directory does not exist" () sexp_of_unit
+    |> return

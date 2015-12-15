@@ -38,3 +38,11 @@ val fold :
            | `Broken_link of (rel, link) t ] -> 'a Deferred.t) ->
   init:'a ->
   'a Deferred.Or_error.t
+
+val fold_follows_links :
+  (abs, dir) t ->
+  f:('a -> [ `File of (abs, file) t * (abs, file) t * bool
+           | `Dir  of (abs, dir) t  * (abs, dir) t * bool
+           | `Broken_link of (abs, link) t * (abs, link) t * bool ] -> 'a Deferred.t) ->
+  init:'a ->
+  'a Deferred.Or_error.t
