@@ -321,6 +321,7 @@ let create_test_directory path =
   Unix.mkdir (f "foo/bar") >>= fun () ->
   Writer.save (f "foo/bar/baz") ~contents:"baz" >>= fun () ->
   Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux") >>= fun () ->
+  Unix.symlink ~src:".." ~dst:(f "foo/bar/norf") >>= fun () ->
   Unix.symlink ~src:"foo/bar/booz" ~dst:(f "broken")
 
 type path_wrapper = PW : (Phat.rel,_) Phat.t -> path_wrapper
@@ -332,9 +333,10 @@ let test_directory_description =
   let foo_bar = foo / dir_exn "bar" in
   let foo_bar_baz = foo_bar / file_exn "baz" in
   let qux = link_exn "qux" foo_bar_baz in
+  let norf = foo_bar / link_exn "norf" dotdot in
   let broken = broken_link_exn "broken" ["foo" ; "bar" ; "booz" ]
   in
-  [ PW foo ; PW foo_bar ; PW foo_bar_baz ; PW qux ; PW broken ]
+  [ PW foo ; PW foo_bar ; PW foo_bar_baz ; PW qux ; PW broken ; PW norf ]
 
 
 let filesys_exists ctx =
@@ -541,6 +543,39 @@ let reify_directory ctx =
         assert_failure msg
     )
 
+
+let fold_follows_links_works_on_test_directory ctx =
+  let tmpdir_as_str = OUnit2.bracket_tmpdir ctx in
+  let tmpdir = ok_exn (Phat.abs_dir tmpdir_as_str) in
+  let description =
+    let h x = Phat.concat tmpdir x in
+    let f = function PW p ->
+    match Phat.typ_of p with
+    | `File file -> `File (h file)
+    | `Dir dir -> `Dir (h dir)
+    | `Link bl -> `Broken_link (h bl)
+    in
+    (`Dir tmpdir) :: List.map test_directory_description ~f
+  in
+  let expected = List.sort ~cmp:compare description in
+  let map_elts = function
+    | `File (_,f) -> `File f
+    | `Dir (_, d) -> `Dir d
+    | `Broken_link (_, bl) -> `Broken_link bl
+  in
+  let to_string = function
+    | `File x -> sprintf "(File %s)" (Phat.to_string x)
+    | `Dir x -> sprintf "(Dir  %s)" (Phat.to_string x)
+    | `Broken_link x -> sprintf "(Broken_link %s)" (Phat.to_string x)
+  in
+  create_test_directory tmpdir_as_str >>= fun () ->
+  Phat.fold_follows_links tmpdir ~init:[] ~f:(fun accu elt ->
+      return (map_elts elt :: accu)
+    )
+  >>| function
+  | Ok l -> assert_equal ~printer:(fun xs -> String.concat ~sep:"\n" (List.map xs ~f:to_string)) expected (List.sort ~cmp:compare l)
+  | Error _ -> assert_failure "Fold failed on test directory"
+
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
     "Sexp serialization" >:: sexp_serialization ;
@@ -555,6 +590,7 @@ let suite = "Phat test suite" >::: [
     "Create dir paths" >::= filesys_mkdir ;
     "Fold works on test dir" >::= fold_works_on_test_directory ;
     "Reify directory" >::= reify_directory ;
+    "Fold (when following link) works on test dir" >::= fold_follows_links_works_on_test_directory ;
   ]
 
 let () = Random.init 42

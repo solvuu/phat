@@ -38,41 +38,64 @@ let and_check f x e =
   | `Unknown -> return `Unknown
 
 
-(** Async's [file_exists] has a
-    {{:https://github.com/janestreet/async_unix/issues/6}bug} that
-    doesn't allow setting follow_symlinks to false. *)
-let file_exists x =
-  In_thread.run (fun () -> Core.Std.Sys.file_exists ~follow_symlinks:false x)
+module U = struct
 
-let is_file x = Sys.is_file ~follow_symlinks:false x
-let is_directory x = Sys.is_directory ~follow_symlinks:false x
+  let wrap loc f =
+    try_with f >>|
+    Or_error.of_exn_result >>|
+    Or_error.tag_loc loc
 
-let is_link p =
-  file_exists p >>= function
-  | `No
-  | `Unknown as x ->
-    return x
-  | `Yes ->
-    Unix.lstat p >>| fun {Unix.Stats.kind; _} ->
-    match kind with
-    | `Link ->
-      `Yes
-    | `File | `Directory | `Char | `Block | `Fifo | `Socket ->
-      `No
+  (** Async's [file_exists] has a
+      {{:https://github.com/janestreet/async_unix/issues/6}bug} that
+      doesn't allow setting follow_symlinks to false. *)
+  let file_exists x =
+    In_thread.run (fun () -> Core.Std.Sys.file_exists ~follow_symlinks:false x)
+
+  let is_file x = Sys.is_file ~follow_symlinks:false x
+  let is_directory x = Sys.is_directory ~follow_symlinks:false x
+
+  let is_link p =
+    file_exists p >>= function
+    | `No
+    | `Unknown as x ->
+      return x
+    | `Yes ->
+      Unix.lstat p >>| fun {Unix.Stats.kind; _} ->
+      match kind with
+      | `Link ->
+        `Yes
+      | `File | `Directory | `Char | `Block | `Fifo | `Socket ->
+        `No
+
+
+  let mkdir p =
+    wrap _here_ (fun () -> Unix.mkdir p)
+
+  let symlink link_path ~targets:link_target =
+    wrap _here_ (fun () ->
+        Unix.symlink ~dst:link_path ~src:link_target
+      )
+
+  let realpath x =
+    wrap _here_ (fun () ->
+        In_thread.run (fun () -> Filename.realpath x)
+      )
+
+end
 
 
 let exists_as_file p =
-  file_exists p >>= function
+  U.file_exists p >>= function
   | `No | `Unknown as x -> return x
   | `Yes -> (
-      is_file p >>= function
+      U.is_file p >>= function
       | `Yes | `Unknown as x -> return x
       | `No -> (
-          is_directory p >>= function
+          U.is_directory p >>= function
           | `Yes -> return `Yes_as_other_object
           | `Unknown -> return `Unknown
           | `No -> (
-              is_link p >>= function
+              U.is_link p >>= function
               | `No -> return `Yes_as_other_object
               | `Unknown -> return `Unknown
               | `Yes -> (
@@ -85,17 +108,17 @@ let exists_as_file p =
     )
 
 let exists_as_directory p =
-  file_exists p >>= function
+  U.file_exists p >>= function
   | `No | `Unknown as x -> return x
   | `Yes -> (
-      is_directory p >>= function
+      U.is_directory p >>= function
       | `Yes | `Unknown as x -> return x
       | `No -> (
-          is_file p >>= function
+          U.is_file p >>= function
           | `Yes -> return `Yes_as_other_object
           | `Unknown -> return `Unknown
           | `No -> (
-              is_link p >>= function
+              U.is_link p >>= function
               | `No -> return `Yes_as_other_object
               | `Unknown -> return `Unknown
               | `Yes -> (
@@ -109,10 +132,10 @@ let exists_as_directory p =
 
 
 let exists_as_link p target =
-  file_exists p >>= function
+  U.file_exists p >>= function
   | `No | `Unknown as x -> return x
   | `Yes -> (
-      is_link p >>= function
+      U.is_link p >>= function
       | `No -> return `Yes_as_other_object
       | `Unknown -> return `Unknown
       | `Yes ->
@@ -126,9 +149,9 @@ let rec exists
   =
   let open Path in
   function
-  | Item Root -> (file_exists "/" :> exists_answer Deferred.t)
+  | Item Root -> (U.file_exists "/" :> exists_answer Deferred.t)
   | Cons (Root, p_rel) ->
-    file_exists "/"
+    U.file_exists "/"
     >>| exists_answer
     >>= and_check (exists_rel_path root) p_rel
 
@@ -146,7 +169,7 @@ and exists_item
     | Path.Broken_link (_, target) ->
       let target_does_not_exist target =
         let target_as_str = Filename.of_parts target in
-        file_exists (
+        U.file_exists (
           match target with
           | "/" :: _ -> target_as_str
           | _ -> Filename.concat (Path.to_string p_abs) target_as_str
@@ -183,19 +206,6 @@ let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   Or_error.of_exn_result >>|
   Or_error.tag_loc _here_
 
-let wrap_unix loc f =
-  try_with f >>|
-  Or_error.of_exn_result >>|
-  Or_error.tag_loc loc
-
-let unix_mkdir p =
-  wrap_unix _here_ (fun () -> Unix.mkdir (Path.to_string p))
-
-let unix_symlink link_path ~targets:link_target =
-  wrap_unix _here_ (fun () ->
-      Unix.symlink ~dst:(Path.to_string link_path) ~src:(Path.to_string link_target)
-    )
-
 let rec mkdir
   : Path.abs_dir -> unit Or_error.t Deferred.t
   = fun p ->
@@ -213,7 +223,7 @@ and mkdir_aux
       | `Yes_as_other_object ->
         let msg = sprintf "Path %s already exists and is not a directory" (Path.to_string p) in
         DOR.error_string msg
-      | `No -> unix_mkdir p
+      | `No -> U.mkdir (Path.to_string p)
       | `Unknown ->
         let msg = sprintf "Insufficient permissions to create %s" (Path.to_string p) in
         DOR.error_string msg
@@ -227,7 +237,7 @@ and mkdir_aux
     | Path.Item Path.Dotdot -> return (Ok ())
     | Path.Item (Path.Link (_, dir)) -> (
         let p = Path.concat p_abs p_rel in
-        unix_symlink p ~targets:dir >>=? fun () ->
+        U.symlink (Path.to_string p) ~targets:(Path.to_string dir) >>=? fun () ->
         match Path.kind_of dir with
         | `Rel dir -> mkdir_aux p_abs dir
         | `Abs dir -> mkdir dir
@@ -238,7 +248,7 @@ and mkdir_aux
         mkdir_aux p_abs' p_rel'
       )
     | Path.Cons (Path.Link (_, dir) as l, p_rel') -> (
-        unix_symlink (Path.cons p_abs l) ~targets:dir >>=? fun () ->
+        U.symlink Path.(to_string (cons p_abs l)) ~targets:(Path.to_string dir) >>=? fun () ->
         match Path.kind_of dir with
         | `Rel dir ->
           mkdir_aux p_abs (Path.concat dir p_rel')
@@ -297,13 +307,13 @@ and reify_aux_item
     let p_str = Path.to_string p in
     match item with
     | Path.File n -> (
-        is_link p_str >>= function
+        U.is_link p_str >>= function
         | `Yes -> reify_link Path.file_of_any_kind p_abs n p_str
         | `No ->  Deferred.Or_error.return p
         | `Unknown -> assert false (* [EXIST] *)
       )
     | Path.Dir n -> (
-        is_link p_str >>= function
+        U.is_link p_str >>= function
         | `Yes -> reify_link Path.dir_of_any_kind p_abs n p_str
         | `No ->  Deferred.Or_error.return p
         | `Unknown -> assert false (* [EXIST] *)
@@ -369,8 +379,11 @@ and reify_link
 let rec fold_aux p_abs p_rel obj ~f ~init =
   let dir = Path.(concat p_abs p_rel) in
   match obj with
-  | `File file -> f init (`File (Path.cons p_rel file |> Path.normalize))
-  | `Broken_link bl ->  f init (`Broken_link Path.(cons p_rel bl |> normalize))
+  | `File file
+  | `Link (`File file) -> f init (`File (Path.cons p_rel file |> Path.normalize))
+  | `Broken_link bl
+  | `Link (`Broken_link bl) ->  f init (`Broken_link Path.(cons p_rel bl |> normalize))
+  | `Link (`Dir dir) -> f init (`Dir (Path.cons p_rel dir |> Path.normalize))
   | `Dir subdir_item ->
     let subdir_rel = Path.(cons p_rel subdir_item |> normalize) in
     let subdir = Path.cons dir subdir_item in
@@ -390,7 +403,8 @@ let rec fold_aux p_abs p_rel obj ~f ~init =
             return (`Dir (Path.Dir n))
 
           | `Link ->
-            discover_link subdir subdir_as_str n
+            discover_link subdir subdir_as_str n >>| fun obj ->
+            `Link obj
         )
         >>= fun item ->
         fold_aux p_abs (Path.cons p_rel subdir_item) item ~f ~init:accu
@@ -429,6 +443,108 @@ let fold start ~f ~init =
   | `Yes | `Yes_modulo_links ->
     fold_aux start Path.(Item (Path.Dot)) (`Dir Path.Dot) ~f ~init >>| fun r ->
     Ok r
+
+  | `No | `Unknown | `Yes_as_other_object ->
+    errorh _here_ "Directory does not exist" () sexp_of_unit
+    |> return
+
+
+module Wrapped_path = struct
+  type t = P : (_,_) Path.t -> t
+  let compare = Pervasives.compare
+  let t_of_sexp _ = assert false
+  let sexp_of_t _ = assert false
+end
+
+(* wrapped path set *)
+module WPS = struct
+  open Wrapped_path
+  include Set.Make(Wrapped_path)
+  let add set p = add set (P p)
+  let add_obj set = function
+      `File file -> add set file
+    | `Dir dir -> add set dir
+    | `Broken_link bl -> add set bl
+  let mem set p = mem set (P p)
+  let mem_obj set = function
+      `File file -> mem set file
+    | `Dir dir -> mem set dir
+    | `Broken_link bl -> mem set bl
+end
+
+(*
+   PRECONDITIONS:
+   - [obj] refers to an existing object
+ *)
+let rec fold_follows_links_aux visited obj ~f ~(init:'a) : ('a * WPS.t) Deferred.Or_error.t =
+  let realpath
+    : type o. (Path.abs, o) Path.t -> (Path.abs, o) Path.t DOR.t
+    = fun p ->
+      let p_str = Path.to_string p in
+      match p with
+      | Path.Cons (Path.Root, p_rel) ->
+        let p_item = Path.last_item p_rel in
+        U.realpath (Filename.dirname p_str) >>=? fun resolved_parent_str ->
+        return (Path.abs_dir resolved_parent_str) >>=? fun resolved_parent ->
+        DOR.return (Path.cons resolved_parent p_item)
+      | Path.Item Path.Root -> DOR.return p
+  in
+  let visit cons p k =
+    realpath p >>=? fun resolved_p ->
+    if WPS.mem visited resolved_p then
+      Deferred.Or_error.return (init, visited)
+    else (
+      f init (cons (p, resolved_p)) >>= fun result ->
+      let visited' = WPS.add visited resolved_p in
+      k (result, visited')
+    )
+  in
+  match obj with
+  | `File file ->
+    visit (fun x -> `File x) file DOR.return
+
+  | `Dir dir ->
+    visit (fun x -> `Dir x) dir (fun init ->
+        let dir_str = Path.to_string dir in
+
+        Sys.readdir dir_str >>| Array.to_list >>= fun dir_contents ->
+        Deferred.Or_error.List.fold dir_contents ~init ~f:(fun (accu, visited) obj ->
+            let obj_as_str = Filename.concat dir_str obj in
+            let n = Path.name_exn obj in (* the objects exists, so it has a legal name *)
+            Unix.(lstat obj_as_str) >>= fun stats ->
+            match stats.Unix.Stats.kind with
+            | `File | `Block | `Char | `Fifo | `Socket ->
+              let next_obj = `File (Path.cons dir (Path.File n)) in
+              fold_follows_links_aux visited next_obj ~f ~init:accu
+
+            | `Directory ->
+              let next_obj = `Dir (Path.cons dir (Path.Dir n)) in
+              fold_follows_links_aux visited next_obj ~f ~init:accu
+
+            | `Link ->
+              discover_link dir dir_str n >>| (function
+                  | `File f -> `File (Path.cons dir f)
+                  | `Dir d ->
+                    `Dir (Path.cons dir d)
+                  | `Broken_link bl -> `Broken_link (Path.cons dir bl)
+                )
+              >>= fun next_obj ->
+              fold_follows_links_aux visited next_obj ~f ~init:accu
+          )
+      )
+
+    | `Broken_link (bl : (Path.abs, Path.link) Path.t) ->
+      visit (fun x -> `Broken_link x) bl DOR.return
+
+
+
+let fold_follows_links start ~f ~init =
+  exists start >>= function
+  | `Yes | `Yes_modulo_links -> (
+      fold_follows_links_aux WPS.empty (`Dir start)  ~f ~init >>| function
+      | Ok (r, _) -> Ok r
+      | Error e -> Error e
+    )
 
   | `No | `Unknown | `Yes_as_other_object ->
     errorh _here_ "Directory does not exist" () sexp_of_unit
