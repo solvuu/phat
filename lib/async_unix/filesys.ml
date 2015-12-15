@@ -379,8 +379,11 @@ and reify_link
 let rec fold_aux p_abs p_rel obj ~f ~init =
   let dir = Path.(concat p_abs p_rel) in
   match obj with
-  | `File file -> f init (`File (Path.cons p_rel file |> Path.normalize))
-  | `Broken_link bl ->  f init (`Broken_link Path.(cons p_rel bl |> normalize))
+  | `File file
+  | `Link (`File file) -> f init (`File (Path.cons p_rel file |> Path.normalize))
+  | `Broken_link bl
+  | `Link (`Broken_link bl) ->  f init (`Broken_link Path.(cons p_rel bl |> normalize))
+  | `Link (`Dir dir) -> f init (`Dir (Path.cons p_rel dir |> Path.normalize))
   | `Dir subdir_item ->
     let subdir_rel = Path.(cons p_rel subdir_item |> normalize) in
     let subdir = Path.cons dir subdir_item in
@@ -400,7 +403,8 @@ let rec fold_aux p_abs p_rel obj ~f ~init =
             return (`Dir (Path.Dir n))
 
           | `Link ->
-            discover_link subdir subdir_as_str n
+            discover_link subdir subdir_as_str n >>| fun obj ->
+            `Link obj
         )
         >>= fun item ->
         fold_aux p_abs (Path.cons p_rel subdir_item) item ~f ~init:accu
