@@ -473,29 +473,39 @@ end
    - [obj] refers to an existing object
  *)
 let rec fold_follows_links_aux visited resolved_visited obj ~f ~(init:'a) : ('a * WPS.t * WPS.t) Deferred.Or_error.t =
+  let realpath parse p =
+    let p_str = Path.to_string p in
+    U.realpath p_str >>=? fun resolved_p_str ->
+    return (parse resolved_p_str)
+  in
+  let realpath_bl bl =
+    let bl_str = Path.to_string bl in
+    let bl_item = match bl with
+      | Path.Cons (Path.Root, p_rel) -> Path.last_item p_rel
+      | Path.Item _ -> assert false
+    in
+    U.realpath (Filename.dirname bl_str) >>=? fun resolved_parent_str ->
+    return (Path.abs_dir resolved_parent_str) >>=? fun resolved_parent ->
+    DOR.return (Path.cons resolved_parent bl_item)
+  in
+  let visit realpath cons obj p =
+    realpath p >>=? fun resolved_p ->
+    let already_visited = WPS.mem resolved_visited resolved_p in
+    f init (cons (p, resolved_p, already_visited)) >>= fun result ->
+    let visited' = WPS.add_obj visited obj in
+    let resolved_visited' = WPS.add resolved_visited resolved_p in
+    Deferred.Or_error.return (result, visited', resolved_visited')
+  in
   if WPS.mem_obj visited obj then Deferred.Or_error.return (init, visited, resolved_visited) else (
     match obj with
     | `File file ->
-      let file_str = Path.to_string file in
-      U.realpath file_str >>=? fun resolved_file_str ->
-      return (Path.abs_file resolved_file_str) >>=? fun resolved_file ->
-      let already_visited = WPS.mem resolved_visited resolved_file in
-      f init (`File (file, resolved_file, already_visited)) >>= fun result ->
-      let visited' = WPS.add_obj visited obj in
-      let resolved_visited' = WPS.add resolved_visited resolved_file in
-      Deferred.Or_error.return (result, visited', resolved_visited')
+      visit (realpath Path.abs_file) (fun x -> `File x) obj file
 
     | `Dir dir ->
+      visit (realpath Path.abs_dir) (fun x -> `Dir x) obj dir >>=? fun init ->
       let dir_str = Path.to_string dir in
-      U.realpath dir_str >>=? fun resolved_dir_str ->
-      return (Path.abs_dir resolved_dir_str) >>=? fun resolved_dir ->
-      let already_visited = WPS.mem resolved_visited resolved_dir in
-      f init (`Dir (dir, resolved_dir, already_visited)) >>= fun result ->
-      let visited' = WPS.add_obj visited obj in
-      let resolved_visited' = WPS.add resolved_visited resolved_dir in
 
       Sys.readdir dir_str >>| Array.to_list >>= fun dir_contents ->
-      let init = result, visited', resolved_visited' in
       Deferred.Or_error.List.fold dir_contents ~init ~f:(fun (accu, visited, resolved_visited) obj ->
           let obj_as_str = Filename.concat dir_str obj in
           let n = Path.name_exn obj in (* the objects exists, so it has a legal name *)
@@ -520,19 +530,7 @@ let rec fold_follows_links_aux visited resolved_visited obj ~f ~(init:'a) : ('a 
         )
 
     | `Broken_link (bl : (Path.abs, Path.link) Path.t) ->
-      let bl_str = Path.to_string bl in
-      let bl_item = match bl with
-        | Path.Cons (Path.Root, p_rel) -> Path.last_item p_rel
-        | Path.Item _ -> assert false
-      in
-      U.realpath (Filename.dirname bl_str) >>=? fun resolved_parent_str ->
-      return (Path.abs_dir resolved_parent_str) >>=? fun resolved_parent ->
-      let resolved_bl = Path.cons resolved_parent bl_item in
-      let already_visited = WPS.mem resolved_visited resolved_bl in
-      f init (`Broken_link (bl, resolved_bl, already_visited)) >>= fun result ->
-      let visited' = WPS.add_obj visited obj in
-      let resolved_visited' = WPS.add resolved_visited resolved_bl in
-      Deferred.Or_error.return (result, visited', resolved_visited')
+      visit realpath_bl (fun x -> `Broken_link x) obj bl
   )
 
 
