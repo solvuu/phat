@@ -541,6 +541,45 @@ let reify_directory ctx =
         assert_failure msg
     )
 
+
+let fold_follows_links_works_on_test_directory ctx =
+  let tmpdir_as_str = OUnit2.bracket_tmpdir ctx in
+  let tmpdir = ok_exn (Phat.abs_dir tmpdir_as_str) in
+  let description =
+    let f = function PW p ->
+    match Phat.typ_of p with
+    | `File file ->
+      let file = Phat.concat tmpdir file in
+      `File (file, Phat.resolve file)
+    | `Dir dir ->
+      let dir = Phat.concat tmpdir dir in
+      `Dir (dir, Phat.resolve dir)
+    | `Link bl ->
+      let bl = Phat.concat tmpdir bl in
+      `Broken_link (bl, Phat.resolve bl)
+    in
+    (`Dir (tmpdir, tmpdir)) :: List.map test_directory_description ~f
+  in
+  let expected = List.sort ~cmp:compare description in
+  let descr_of_elt =
+    function
+    | `File (file, resolved_file, _) -> `File (file, resolved_file)
+    | `Dir (dir, resolved_dir, _) -> `Dir (dir, resolved_dir)
+    | `Broken_link (bl, resolved_bl, _) -> `Broken_link (bl, resolved_bl)
+  in
+  let to_string = function
+    | `File (x, y) -> sprintf "(File %s %s)" (Phat.to_string x) (Phat.to_string y)
+    | `Dir (x,  y) -> sprintf "(Dir  %s %s)" (Phat.to_string x) (Phat.to_string y)
+    | `Broken_link (x, y) -> sprintf "(Broken_link  %s %s)" (Phat.to_string x) (Phat.to_string y)
+  in
+  create_test_directory tmpdir_as_str >>= fun () ->
+  Phat.fold_follows_links tmpdir ~init:[] ~f:(fun accu elt ->
+      return ((descr_of_elt elt) :: accu)
+    )
+  >>| function
+  | Ok l -> assert_equal ~printer:(List.to_string ~f:to_string) expected (List.sort ~cmp:compare l)
+  | Error _ -> assert_failure "Fold failed on test directory"
+
 let suite = "Phat test suite" >::: [
     "Name constructor" >:: name_constructor ;
     "Sexp serialization" >:: sexp_serialization ;
@@ -555,6 +594,7 @@ let suite = "Phat test suite" >::: [
     "Create dir paths" >::= filesys_mkdir ;
     "Fold works on test dir" >::= fold_works_on_test_directory ;
     "Reify directory" >::= reify_directory ;
+    "Fold (when following link) works on test dir" >::= fold_follows_links_works_on_test_directory ;
   ]
 
 let () = Random.init 42
