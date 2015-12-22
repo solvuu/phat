@@ -8,7 +8,6 @@ module List = struct
 end
 
 module Info : sig
-
   (** Library or app name. *)
   type name =  [`Lib of string | `App of string]
 
@@ -50,7 +49,6 @@ module Info : sig
 
   (** Returns all packages item with given [name] depends on. *)
   val pkgs_all : t -> name -> string list
-
 end = struct
   type name = [`Lib of string | `App of string]
   type item = {name:name; libs:string list; pkgs:string list}
@@ -154,9 +152,14 @@ end = struct
     include ListLabels
   end
 
+  let readdir dir : string list =
+    match Sys.file_exists dir && Sys.is_directory dir with
+    | false -> []
+    | true -> (Sys.readdir dir |> Array.to_list)
+
   let all_libs : string list =
     let found =
-      Sys.readdir "lib" |> Array.to_list
+      readdir "lib"
       |> List.filter ~f:(fun x -> Sys.is_directory ("lib"/x))
       |> List.sort ~cmp:compare
     in
@@ -170,7 +173,7 @@ end = struct
 
   let all_apps : string list =
     let found =
-      Sys.readdir "app" |> Array.to_list
+      readdir "app"
       |> List.map ~f:Filename.chop_extension
       |> List.sort ~cmp:compare
     in
@@ -195,6 +198,8 @@ end = struct
   let tags_lines : string list =
     [
       "true: thread, bin_annot, annot, short_paths, safe_string, debug";
+      "true: warn(A-4-33-41-42-44-45-48)";
+      "true: use_menhir";
       "\"lib\": include";
     ]
     @(List.map all_libs ~f:(fun x ->
@@ -224,6 +229,34 @@ end = struct
 	  (Info.name_as_string name)
 	  (String.concat "," (List.map pkgs ~f:(sprintf "package(%s)")))
       )
+    )
+
+  (** Chop known suffixes off filename or return None. *)
+  let chop_suffix filename : string option =
+    List.fold_left
+      [".ml"; ".mli"; ".ml.m4"; ".mll"; ".mly"]
+      ~init:None ~f:(fun accum suffix ->
+	match accum with
+	| Some _ as x -> x
+	| None ->
+	   if Filename.check_suffix filename suffix then
+	     Some (Filename.chop_suffix filename suffix)
+	   else
+	     None
+      )
+
+  let mlpack_file dir : string list =
+    if not (Sys.file_exists dir && Sys.is_directory dir) then
+      failwithf "cannot create mlpack file for dir %s" dir ()
+    else (
+      readdir dir
+      |> List.map ~f:chop_suffix
+      |> List.filter ~f:(function Some _ -> true | None -> false)
+      |> List.map ~f:(function
+	| Some x -> dir/(String.capitalize x) | None -> assert false
+      )
+      |> List.sort_uniq compare
+      |> List.map ~f:(sprintf "%s\n") (* I think due to bug in ocamlbuild. *)
     )
 
   let merlin_file : string list =
@@ -316,6 +349,28 @@ end = struct
 	    P (env "%.ml");
 	  ]) )
       ;
+
+      rule "atd: .atd -> _t.ml, _t.mli"
+	~dep:"%.atd"
+	~prods:["%_t.ml"; "%_t.mli"]
+	(fun env _ ->
+	  Cmd (S [A "atdgen"; A "-t"; A "-j-std"; P (env "%.atd")])
+	)
+      ;
+
+      rule "atd: .atd -> _j.ml, _j.mli"
+	~dep:"%.atd"
+	~prods:["%_j.ml"; "%_j.mli"]
+	(fun env _ ->
+	  Cmd (S [A "atdgen"; A "-j"; A "-j-std"; P (env "%.atd")])
+	)
+      ;
+
+      List.iter all_libs ~f:(fun lib ->
+	make_static_file
+	  (sprintf "lib/%s_%s.mlpack" project_name lib)
+	  (mlpack_file ("lib"/lib))
+      );
 
       make_static_file ".merlin" merlin_file;
       make_static_file "META" meta_file;
