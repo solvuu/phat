@@ -41,6 +41,37 @@ let common_handler log_level : unit Or_error.t Deferred.t =
   Log.Global.set_level log_level;
   return (Ok ())
 
+
+(******************************************************************************)
+(* tree                                                                       *)
+(******************************************************************************)
+let tree : Command.t = async_or_error'
+  ~summary:"print a directory tree"
+  Param.(common_args @@ anon ("DIR" %: string) @> nil)
+  (fun a dir () ->
+    common_handler a >>=? fun () ->
+    (
+      return (Phat.dir_of_any_kind dir) >>=? function
+      | `Abs abs_dir -> return (Ok abs_dir)
+      | `Rel rel_dir -> (
+	(Unix.getcwd() >>| Phat.abs_dir) >>|? fun cwd ->
+	Phat.concat cwd rel_dir
+      )
+    ) >>=?
+    Phat.fold ~init:[] ~f:(fun accum x ->
+      let x = match x with
+	| `File x -> Phat.to_string x
+	| `Dir x -> Phat.to_string x
+	| `Broken_link x -> Phat.to_string x
+      in
+      return (x::accum)
+    ) >>|?
+    List.rev >>|? fun l ->
+    List.iter l ~f:(fun x -> Writer.write_line (force Writer.stdout) x);
+  )
+
+
 let main = Command.group ~summary:"file system operations"
   [
+    "tree", tree;
   ]
