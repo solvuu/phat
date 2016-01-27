@@ -46,3 +46,29 @@ val fold_follows_links :
            | `Broken_link of (abs, link) t * (abs, link) t ] -> 'a Deferred.t) ->
   init:'a ->
   'a Deferred.Or_error.t
+
+val iter :
+  (abs, dir) t
+  -> f :
+  (
+    [
+    | `File of (rel, file) t
+    | `Dir of (rel, dir) t
+    | `Broken_link of (rel, link) t
+    ] ->
+    unit Deferred.t
+  )
+  -> unit Deferred.Or_error.t
+
+val iter_follows_links :
+  (abs, dir) t
+  -> f :
+  (
+    [
+    | `File of (abs, file) t * (abs, file) t
+    | `Dir  of (abs, dir) t  * (abs, dir) t
+    | `Broken_link of (abs, link) t * (abs, link) t
+    ] ->
+    unit Deferred.t
+  )
+  -> unit Deferred.Or_error.t

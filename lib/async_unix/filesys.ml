@@ -448,6 +448,8 @@ let fold start ~f ~init =
     errorh _here_ "Directory does not exist" () sexp_of_unit
     |> return
 
+let iter start ~f =
+  fold start ~f:(fun () x -> f x) ~init:()
 
 module Wrapped_path = struct
   type t = P : (_,_) Path.t -> t
@@ -549,3 +551,6 @@ let fold_follows_links start ~f ~init =
   | `No | `Unknown | `Yes_as_other_object ->
     errorh _here_ "Directory does not exist" () sexp_of_unit
     |> return
+
+let iter_follows_links start ~f =
+  fold_follows_links start ~f:(fun () x -> f x) ~init:()
