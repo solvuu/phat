@@ -27,6 +27,11 @@ and ('kind,'typ) t =
   | Item : ('kind,'typ) item -> ('kind,'typ) t
   | Cons : ('kind,dir) item * (rel,'typ) t -> ('kind,'typ) t
 
+type 'typ item_of_any_kind = [
+  | `Abs of (abs,'typ) item
+  | `Rel of (rel,'typ) item
+]
+
 type 'typ of_any_kind = [
   | `Abs of (abs,'typ) t
   | `Rel of (rel,'typ) t
@@ -151,3 +156,8 @@ detect impossible cases where arguments correspond to different
 objects at the same location in the filesystem.
 *)
 val make_relative : (abs, 'typ) t -> from:(abs, dir) t -> (rel, 'typ) t
+
+val last : (_,'typ) t -> 'typ item_of_any_kind
+(** Return last item in path. If path is [Item Root], the returned item is
+    absolute, else it is relative.
+*)

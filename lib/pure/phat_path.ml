@@ -33,6 +33,11 @@ and ('kind,'typ) t =
 
 [@@deriving sexp_of]
 
+type 'typ item_of_any_kind = [
+  | `Abs of (abs,'typ) item
+  | `Rel of (rel,'typ) item
+]
+
 type 'typ of_any_kind = [
   | `Abs of (abs,'typ) t
   | `Rel of (rel,'typ) t
@@ -419,6 +424,16 @@ module Make_relative = struct
 end
 
 let make_relative = Make_relative.make_relative
+
+let rec last : type a b . (a,b) t -> b item_of_any_kind = function
+  | Item Root -> `Abs Root
+  | Item (File _ as i) -> `Rel i
+  | Item (Dir _ as i) -> `Rel i
+  | Item (Link (_,_) as i) -> `Rel i
+  | Item (Broken_link (_,_) as i) -> `Rel i
+  | Item Dot -> `Rel Dot
+  | Item Dotdot -> `Rel Dotdot
+  | Cons (_,p) -> last p
 
 (******************************************************************************)
 (* Elems - internal use only                                             *)
