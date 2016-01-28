@@ -435,6 +435,15 @@ let rec last : type a b . (a,b) t -> b item_of_any_kind = function
   | Item Dotdot -> `Rel Dotdot
   | Cons (_,p) -> last p
 
+let rec last_of_rel : type b . (rel,b) t -> (rel,b) item = function
+  | Item (File _ as i) -> i
+  | Item (Dir _ as i) -> i
+  | Item (Link (_,_) as i) -> i
+  | Item (Broken_link (_,_) as i) -> i
+  | Item Dot -> Dot
+  | Item Dotdot -> Dotdot
+  | Cons (_,p) -> last_of_rel p
+
 (******************************************************************************)
 (* Elems - internal use only                                             *)
 (******************************************************************************)

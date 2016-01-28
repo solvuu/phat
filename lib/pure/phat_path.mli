@@ -158,6 +158,9 @@ objects at the same location in the filesystem.
 val make_relative : (abs, 'typ) t -> from:(abs, dir) t -> (rel, 'typ) t
 
 val last : (_,'typ) t -> 'typ item_of_any_kind
-(** Return last item in path. If path is [Item Root], the returned item is
-    absolute, else it is relative.
+(** Return last item in path. If path is [Item Root], the returned
+    item is absolute, else it is relative. See also {!last_of_rel}.
 *)
+
+val last_of_rel : (rel,'typ) t -> (rel,'typ) item
+(** Return last item in a relative path. *)
