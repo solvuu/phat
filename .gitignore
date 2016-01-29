@@ -8,5 +8,5 @@
 /.merlin
 /.ocamlinit
 *~
-*.native
-*.byte
+/*.native
+/*.byte
