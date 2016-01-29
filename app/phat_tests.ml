@@ -1,7 +1,7 @@
 open Core.Std
 open Async.Std
 open OUnit2
-module Phat = Phat_async_unix.Std
+module Phat = Phat_async.Std
 
 (** Like OUnit.(>::), but the test function returns a Deferred. *)
 let (>::=) test_name (f : test_ctxt -> unit Deferred.t) : test =

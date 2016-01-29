@@ -1,6 +1,6 @@
 open Core.Std
 open Async.Std
-module Phat = Phat_async_unix.Std
+module Phat = Phat_async.Std
 
 let () =
   try Command.run ~version:Phat.version Phat.Cli.main

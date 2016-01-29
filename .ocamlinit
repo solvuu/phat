@@ -4,8 +4,8 @@
 
 #directory "_build/lib";;
 #load "phat_pure.cma";;
-#load "phat_async_unix.cma";;
+#load "phat_async.cma";;
 
 open Core.Std;;
 open Async.Std;;
-open Phat_async_unix.Std;;
+open Phat_async.Std;;

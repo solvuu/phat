@@ -18,6 +18,10 @@ let abs_file = Command.Arg_type.create (fun x -> Phat.abs_file x |> ok_exn)
 let rel_file = Command.Arg_type.create (fun x -> Phat.rel_file x |> ok_exn)
 let abs_dir = Command.Arg_type.create (fun x -> Phat.abs_dir x |> ok_exn)
 let rel_dir = Command.Arg_type.create (fun x -> Phat.rel_dir x |> ok_exn)
+let file_of_any_kind = Command.Arg_type.create (fun x ->
+  Phat.file_of_any_kind x |> ok_exn)
+let dir_of_any_kind = Command.Arg_type.create (fun x ->
+  Phat.dir_of_any_kind x |> ok_exn)
 
 (******************************************************************************)
 (* Common app parameters                                                      *)

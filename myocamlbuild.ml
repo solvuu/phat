@@ -407,20 +407,20 @@ include Make(struct
     };
 
     {
-      Info.name = `Lib "async_unix";
+      Info.name = `Lib "async";
       libs = ["pure"];
       pkgs = ["async"];
     };
 
     {
       Info.name = `App "phat_tests";
-      libs = ["async_unix"];
+      libs = ["async"];
       pkgs = ["oUnit"];
     };
 
     {
       Info.name = `App "phat";
-      libs = ["async_unix"];
+      libs = ["async"];
       pkgs = [];
     };
   ]
