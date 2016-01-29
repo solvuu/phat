@@ -6,6 +6,7 @@
 /phat.install
 /tmp/
 /.merlin
+/.ocamlinit
 *~
 *.native
 *.byte
