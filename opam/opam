@@ -23,7 +23,7 @@ depends: [
   "ocamlbuild" {build}
   "solvuu_build" {build & = "dev"}
   "ounit" {test}
-  "core" {>= "111.13.00"}
+  "core" {>= "111.13.00" & <= "113.00.00"}
   "async"
   "ppx_here"
   "ppx_sexp_conv"
