@@ -25,7 +25,7 @@ depends: [
   "ounit" {test}
   "core" {>= "111.13.00" & <= "113.00.00"}
   "async"
-  "ppx_here"
+  "ppx_here" {< "113.24.00"}
   "ppx_sexp_conv"
   "sexplib"
 ]
