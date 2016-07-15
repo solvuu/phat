@@ -21,7 +21,7 @@ install: [
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "solvuu_build" {build & = "dev"}
+  "solvuu-build" {build & = "dev"}
   "ounit" {test}
   "core" {>= "111.13.00" & <= "113.00.00"}
   "async"
