@@ -33,36 +33,34 @@ end
 (******************************************************************************)
 (* tree                                                                       *)
 (******************************************************************************)
-let tree : Command.t = Command.async_or_error'
-  ~summary:"print a directory tree"
-  (
+let tree : Command.t =
   let open Command.Let_syntax in
-  [%map_open
-  let log_level = Param.log_level
-  and dir = Param.(anon ("DIR" %: string)) in
-  fun () ->
-    Log.Global.set_level log_level;
-    (
-      return (Phat.dir_of_any_kind dir) >>=? function
-      | `Abs abs_dir -> return (Ok abs_dir)
-      | `Rel rel_dir -> (
-	(Unix.getcwd() >>| Phat.abs_dir) >>|? fun cwd ->
-	Phat.concat cwd rel_dir
-      )
-    ) >>=?
-    Phat.fold ~init:[] ~f:(fun accum x ->
-      let x = match x with
-	| `File x -> Phat.to_string x
-	| `Dir x -> Phat.to_string x
-	| `Broken_link x -> Phat.to_string x
-      in
-      return (x::accum)
-    ) >>|?
-    List.rev >>|? fun l ->
-    List.iter l ~f:(fun x -> Writer.write_line (force Writer.stdout) x);
-  ]
-  )
-
+  Command.async_or_error'
+    ~summary:"print a directory tree"
+    [%map_open
+      let log_level = Param.log_level
+      and dir = Param.(anon ("DIR" %: string)) in
+      fun () ->
+        Log.Global.set_level log_level;
+        (
+          return (Phat.dir_of_any_kind dir) >>=? function
+          | `Abs abs_dir -> return (Ok abs_dir)
+          | `Rel rel_dir -> (
+              (Unix.getcwd() >>| Phat.abs_dir) >>|? fun cwd ->
+              Phat.concat cwd rel_dir
+            )
+        ) >>=?
+        Phat.fold ~init:[] ~f:(fun accum x ->
+          let x = match x with
+            | `File x -> Phat.to_string x
+            | `Dir x -> Phat.to_string x
+            | `Broken_link x -> Phat.to_string x
+          in
+          return (x::accum)
+        ) >>|?
+        List.rev >>|? fun l ->
+        List.iter l ~f:(fun x -> Writer.write_line (force Writer.stdout) x);
+    ]
 
 let main = Command.group ~summary:"file system operations"
   [
