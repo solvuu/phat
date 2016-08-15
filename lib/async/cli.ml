@@ -5,12 +5,6 @@ module Phat = struct
   include Filesys
 end
 
-(** Async_extra.Command is missing this function. See pull request:
-    - https://github.com/janestreet/async_extra/pull/6
-*)
-let async_or_error' ~summary ?readme params main =
-  Command.async_or_error ~summary ?readme (Command.Spec.of_params params) main
-
 (******************************************************************************)
 (* Argument Types                                                             *)
 (******************************************************************************)
@@ -34,26 +28,20 @@ module Param = struct
       ~doc:(sprintf "level Log level can be debug, info, or error. \
                      Default is info.")
 
-  let common_args remaining_args =
-    log_level @> remaining_args
-
 end
-
-(** Handle [common_args] in a common way. Returns path to config
-    file. *)
-let common_handler log_level : unit Or_error.t Deferred.t =
-  Log.Global.set_level log_level;
-  return (Ok ())
-
 
 (******************************************************************************)
 (* tree                                                                       *)
 (******************************************************************************)
-let tree : Command.t = async_or_error'
+let tree : Command.t = Command.async_or_error'
   ~summary:"print a directory tree"
-  Param.(common_args @@ anon ("DIR" %: string) @> nil)
-  (fun a dir () ->
-    common_handler a >>=? fun () ->
+  (
+  let open Command.Let_syntax in
+  [%map_open
+  let log_level = Param.log_level
+  and dir = Param.(anon ("DIR" %: string)) in
+  fun () ->
+    Log.Global.set_level log_level;
     (
       return (Phat.dir_of_any_kind dir) >>=? function
       | `Abs abs_dir -> return (Ok abs_dir)
@@ -72,6 +60,7 @@ let tree : Command.t = async_or_error'
     ) >>|?
     List.rev >>|? fun l ->
     List.iter l ~f:(fun x -> Writer.write_line (force Writer.stdout) x);
+  ]
   )
 
 

@@ -69,15 +69,15 @@ module U = struct
 
 
   let mkdir p =
-    wrap _here_ (fun () -> Unix.mkdir p)
+    wrap [%here] (fun () -> Unix.mkdir p)
 
   let symlink link_path ~targets:link_target =
-    wrap _here_ (fun () ->
-        Unix.symlink ~dst:link_path ~src:link_target
+    wrap [%here] (fun () ->
+        Unix.symlink ~dst:link_path ~src:link_target ?to_dir:None
       )
 
   let realpath x =
-    wrap _here_ (fun () ->
+    wrap [%here] (fun () ->
         In_thread.run (fun () -> Filename.realpath x)
       )
 
@@ -204,7 +204,7 @@ and exists_rel_path
 let lstat p : Unix.Stats.t Or_error.t Deferred.t =
   try_with (fun () -> Unix.lstat (Path.to_string p)) >>|
   Or_error.of_exn_result >>|
-  Or_error.tag_loc _here_
+  Or_error.tag_loc [%here]
 
 let rec mkdir
   : Path.abs_dir -> unit Or_error.t Deferred.t
@@ -445,7 +445,7 @@ let fold start ~f ~init =
     Ok r
 
   | `No | `Unknown | `Yes_as_other_object ->
-    errorh _here_ "Directory does not exist" () sexp_of_unit
+    errorh [%here] "Directory does not exist" () sexp_of_unit
     |> return
 
 let iter start ~f =
@@ -549,7 +549,7 @@ let fold_follows_links start ~f ~init =
     )
 
   | `No | `Unknown | `Yes_as_other_object ->
-    errorh _here_ "Directory does not exist" () sexp_of_unit
+    errorh [%here] "Directory does not exist" () sexp_of_unit
     |> return
 
 let iter_follows_links start ~f =

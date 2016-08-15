@@ -320,9 +320,9 @@ let create_test_directory path =
   Unix.mkdir (f "foo") >>= fun () ->
   Unix.mkdir (f "foo/bar") >>= fun () ->
   Writer.save (f "foo/bar/baz") ~contents:"baz" >>= fun () ->
-  Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux") >>= fun () ->
-  Unix.symlink ~src:".." ~dst:(f "foo/bar/norf") >>= fun () ->
-  Unix.symlink ~src:"foo/bar/booz" ~dst:(f "broken")
+  Unix.symlink ?to_dir:None ~src:"foo/bar/baz" ~dst:(f "qux") >>= fun () ->
+  Unix.symlink ?to_dir:None ~src:".." ~dst:(f "foo/bar/norf") >>= fun () ->
+  Unix.symlink ?to_dir:None ~src:"foo/bar/booz" ~dst:(f "broken")
 
 type path_wrapper = PW : (Phat.rel,_) Phat.t -> path_wrapper
 

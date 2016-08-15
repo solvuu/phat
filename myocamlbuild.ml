@@ -21,7 +21,7 @@ let make_app ?internal_deps ?findlib_deps short_name : Project.item =
     ?findlib_deps
 
 let pure = make_lib "pure"
-    ~findlib_deps:["core_kernel"; "ppx_sexp_conv"; "ppx_here"]
+    ~findlib_deps:["core_kernel"; "ppx_jane"]
     ~ml_files:(`Add ["about.ml"])
 
 let async = make_lib "async"
