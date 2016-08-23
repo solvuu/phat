@@ -41,7 +41,7 @@ let ocamlinit_postfix = [
   "open Phat_async.Std";
 ]
 
-let optional_pkgs = ["async"; "lwt"]
+let optional_pkgs = ["async"; "lwt"; "oUnit"]
 
 let items =
   [pure;async;phat_tests;phat] |>
