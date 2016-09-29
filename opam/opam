@@ -1,5 +1,4 @@
 opam-version: "1.2"
-version: "dev"
 maintainer: "ashish@solvuu.com"
 authors: "Solvuu"
 homepage: "https://github.com/solvuu/phat"
@@ -11,17 +10,14 @@ tags: ["org:solvuu"]
 build: [
   [make "native"]
   [make "byte"]
-]
-
-install: [
-  [make "META"]
+  [make "_build/META"]
   [make "%{name}%.install"]
 ]
 
 depends: [
   "ocamlfind" {build}
   "ocamlbuild" {build}
-  "solvuu-build" {build & = "dev"}
+  "solvuu-build" {build & >= "0.1.0"}
   "ounit" {test}
   "core" {= "113.33.02+4.03"}
   "async"
