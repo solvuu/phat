@@ -19,7 +19,7 @@ depends: [
   "ocamlbuild" {build}
   "solvuu-build" {build & >= "0.1.0"}
   "ounit" {test}
-  "core" {= "113.33.02+4.03"}
+  "core" {>= "114.20"}
   "async"
   "ppx_jane" {>= "113.24.00"}
 ]

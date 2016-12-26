@@ -73,7 +73,7 @@ module U = struct
 
   let symlink link_path ~targets:link_target =
     wrap [%here] (fun () ->
-        Unix.symlink ~dst:link_path ~src:link_target ?to_dir:None
+        Unix.symlink ~dst:link_path ~src:link_target
       )
 
   let realpath x =
