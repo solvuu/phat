@@ -1,4 +1,4 @@
-(** Extension of Core. Open this module after opening [Core.Std] to
+(** Extension of Core. Open this module after opening [Core] to
     extend Core with additional functionality.
 *)
 open Core_kernel.Std

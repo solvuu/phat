@@ -508,7 +508,7 @@ end = struct
       errorh [%here] "relative path cannot begin with root directory"
         elems sexp_of_elems
     | _::tl ->
-      if List.mem tl "/" then
+      if List.mem tl "/" ~equal:String.equal then
         errorh [%here] "root directory can only occur as first item in path"
           elems sexp_of_elems
       else
@@ -530,7 +530,7 @@ end = struct
     | [] -> assert false
     | "/"::[] -> Ok (Item Root)
     | "/"::tl -> (
-      if List.mem tl "/" then
+      if List.mem tl "/" ~equal:String.equal then
         errorh [%here] "root directory can only occur as first item in path"
           elems sexp_of_elems
       else (

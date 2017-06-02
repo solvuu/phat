@@ -1,5 +1,5 @@
-open Core.Std
-open Async.Std
+open Core
+open Async
 open Phat_path
 
 val abs_file : abs_file Command.Arg_type.t

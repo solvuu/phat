@@ -1,6 +1,6 @@
-open Core.Std
+open Core
 open Phat_pure.Core2
-open Async.Std
+open Async
 module Path = Phat_path
 
 module DOR = Deferred.Or_error
@@ -49,7 +49,7 @@ module U = struct
       {{:https://github.com/janestreet/async_unix/issues/6}bug} that
       doesn't allow setting follow_symlinks to false. *)
   let file_exists x =
-    In_thread.run (fun () -> Core.Std.Sys.file_exists ~follow_symlinks:false x)
+    In_thread.run (fun () -> Core.Sys.file_exists ~follow_symlinks:false x)
 
   let is_file x = Sys.is_file ~follow_symlinks:false x
   let is_directory x = Sys.is_directory ~follow_symlinks:false x
@@ -73,7 +73,7 @@ module U = struct
 
   let symlink link_path ~targets:link_target =
     wrap [%here] (fun () ->
-        Unix.symlink ~dst:link_path ~src:link_target ?to_dir:None
+        Unix.symlink ~dst:link_path ~src:link_target
       )
 
   let realpath x =

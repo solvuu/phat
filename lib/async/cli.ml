@@ -1,5 +1,5 @@
-open Core.Std
-open Async.Std
+open Core
+open Async
 module Phat = struct
   include Phat_path
   include Filesys
@@ -43,8 +43,8 @@ let tree : Command.t =
       fun () ->
         Log.Global.set_level log_level;
         (
-          return (Phat.dir_of_any_kind dir) >>=? function
-          | `Abs abs_dir -> return (Ok abs_dir)
+          Deferred.return (Phat.dir_of_any_kind dir) >>=? function
+          | `Abs abs_dir -> Deferred.return (Ok abs_dir)
           | `Rel rel_dir -> (
               (Unix.getcwd() >>| Phat.abs_dir) >>|? fun cwd ->
               Phat.concat cwd rel_dir
@@ -56,7 +56,7 @@ let tree : Command.t =
             | `Dir x -> Phat.to_string x
             | `Broken_link x -> Phat.to_string x
           in
-          return (x::accum)
+          Deferred.return (x::accum)
         ) >>|?
         List.rev >>|? fun l ->
         List.iter l ~f:(fun x -> Writer.write_line (force Writer.stdout) x);

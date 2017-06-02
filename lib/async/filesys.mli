@@ -1,6 +1,6 @@
 (** Operations on file systems *)
-open Core.Std
-open Async.Std
+open Core
+open Async
 open Phat_path
 
 (** [exists p] is either:
