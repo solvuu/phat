@@ -1,0 +1,17 @@
+(jbuild_version 1)
+
+(executable (
+  (name phat)
+  (public_name phat)
+  (package phat-async)
+  (libraries (phat-async))
+  (modules (phat))
+))
+
+(executable (
+  (name phat_tests)
+  (public_name phat-tests)
+  (package phat-async)
+  (libraries (phat-async oUnit))
+  (modules (phat_tests))
+))

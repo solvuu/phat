@@ -1,8 +1,6 @@
 /_build/
-/phat.install
+/*.install
+.merlin
 /tmp/
-/.merlin
-/.ocamlinit
+.DS_Store
 *~
-/*.native
-/*.byte

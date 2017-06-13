@@ -1,0 +1,20 @@
+opam-version: "1.2"
+maintainer: "ashish@solvuu.com"
+authors: "Solvuu"
+homepage: "https://github.com/solvuu/phat"
+dev-repo: "https://github.com/solvuu/phat.git"
+bug-reports: "https://github.com/solvuu/phat/issues"
+license: "ISC"
+tags: ["org:solvuu"]
+
+build: [
+  ["jbuilder" "build" "-p" name "-j" jobs]
+]
+
+depends: [
+  "core_kernel" {>= "v0.9.0"}
+  "jbuilder" {build}
+  "ounit" {test}
+]
+
+ocaml-version: [ >= "4.01.0" ]

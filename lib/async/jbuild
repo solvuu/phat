@@ -1,0 +1,9 @@
+(jbuild_version 1)
+
+(library (
+  (name phat_async)
+  (public_name phat-async)
+  (synopsis "Strongly typed file path and file system operations.")
+  (libraries (phat-pure async))
+  (preprocess (pps (ppx_jane)))
+))
