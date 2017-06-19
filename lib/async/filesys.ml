@@ -1,5 +1,5 @@
 open Core
-open Phat_pure.Core2
+open Phat_base.Core2
 open Async
 module Path = Phat_path
 

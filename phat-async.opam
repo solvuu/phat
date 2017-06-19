@@ -15,7 +15,7 @@ depends: [
   "async" {>= "v0.9.0"}
   "jbuilder" {build}
   "ounit" {test}
-  "phat-pure"
+  "phat-base"
 ]
 
 ocaml-version: [ >= "4.01.0" ]

@@ -5,5 +5,5 @@ all:
 .PHONY: clean
 clean:
 	rm -rf _build
-	rm -f phat{-pure,-async}.install
-	rm -f app/.merlin lib/{pure,async}/.merlin
+	rm -f phat-{base,async}.install
+	rm -f app/.merlin lib/{base,async}/.merlin
