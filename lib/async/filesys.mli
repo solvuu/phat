@@ -1,7 +1,7 @@
 (** Operations on file systems *)
 open Core
 open Async
-open Phat_path
+open Path
 
 (** [exists p] is either:
    - [`Yes] if [p] exists verbatim on the file system

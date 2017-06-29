@@ -4,7 +4,7 @@
 open Core
 open Async
 
-include Phat_base.Phat_path
+include Phat_base__Path
 
 let abs_file_of_any ?(base_dir:abs_dir option) (x:string)
   : abs_file Or_error.t Deferred.t

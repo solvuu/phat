@@ -1,6 +1,6 @@
 open Core
 open Async
-open Phat_path
+open Path
 
 val abs_file : abs_file Command.Arg_type.t
 val rel_file : rel_file Command.Arg_type.t
