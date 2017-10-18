@@ -99,7 +99,7 @@ let exists_as_file p =
               | `Unknown -> return `Unknown
               | `Yes -> (
                   Unix.stat p >>| function
-                  | { Unix.Stats.kind = `File } -> `Yes_modulo_links
+                  | { Unix.Stats.kind = `File ; _ } -> `Yes_modulo_links
                   | _ -> `Yes_as_other_object
                 )
             )
@@ -122,7 +122,7 @@ let exists_as_directory p =
               | `Unknown -> return `Unknown
               | `Yes -> (
                   Unix.stat p >>| function
-                  | { Unix.Stats.kind = `Directory } -> `Yes_modulo_links
+                  | { Unix.Stats.kind = `Directory ; _ } -> `Yes_modulo_links
                   | _ -> `Yes_as_other_object
                 )
             )
@@ -345,7 +345,7 @@ and reify_link
   = fun parse p_abs n p_str ->
     Unix.readlink p_str >>= fun target_str ->
     try_with Unix.(fun () -> stat p_str) >>= function
-    | Ok stats -> ( (* hence the target exists! *)
+    | Ok _stats -> ( (* hence the target exists! *)
         let target =
           parse target_str
           |> ok_exn (* safe because the target exists, meaning the
@@ -462,15 +462,7 @@ module WPS = struct
   open Wrapped_path
   include Set.Make(Wrapped_path)
   let add set p = add set (P p)
-  let add_obj set = function
-      `File file -> add set file
-    | `Dir dir -> add set dir
-    | `Broken_link bl -> add set bl
   let mem set p = mem set (P p)
-  let mem_obj set = function
-      `File file -> mem set file
-    | `Dir dir -> mem set dir
-    | `Broken_link bl -> mem set bl
 end
 
 (*

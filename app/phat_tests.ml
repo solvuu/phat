@@ -516,7 +516,7 @@ let fold_works_on_test_directory ctx =
 let reify_directory ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
-  deferred_repeat 100 ~f:(fun i ->
+  deferred_repeat 100 ~f:(fun _ ->
       Process.run ~prog:"rm" ~args:[ "-rf" ; tmpdir ] () >>| ok_exn >>= fun _ ->
       let p =
         NR.abs_dir_path ~link_level:4 ~root:tmpdir_path ()
