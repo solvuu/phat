@@ -1,9 +1,7 @@
 .PHONY: all
 all:
-	jbuilder build @install -j 2
+	jbuilder build @install --dev
 
 .PHONY: clean
 clean:
-	rm -rf _build
-	rm -f phat-{base,async}.install
-	rm -f app/.merlin lib/{base,async}/.merlin
+	jbuilder clean

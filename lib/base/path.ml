@@ -326,10 +326,9 @@ end
 module Make_relative = struct
 
   let rec skip_common_prefix
-    : type typ.
-        (rel, dir) t ->
-        (rel, dir) t ->
-        (rel, dir) t option * (rel, dir) t option
+    : (rel, dir) t ->
+      (rel, dir) t ->
+      (rel, dir) t option * (rel, dir) t option
     = fun p1 p2 ->
       match p1, p2 with
       | Item i1, Item i2 ->
@@ -362,7 +361,7 @@ module Make_relative = struct
   let rec last_item
     : type o. (rel, o) t -> (rel, o) t
     = function
-        Item i as p -> p
+        Item _ as p -> p
       | Cons (_, q) -> last_item q
 
   type _ ty =
@@ -392,7 +391,7 @@ module Make_relative = struct
       match normalize origin, normalize p with
       | Item Root, Item Root -> Item Dot
       | Item Root, Cons (Root, p_rel) -> p_rel
-      | Cons (Root, p_rel), Item Root ->
+      | Cons (Root, _p_rel), Item Root ->
         Option.value_exn (backwards (normalize origin))
         (* backwards provides a result if the path is absolute and normalized *)
       | Cons (Root, q_rel), Cons (Root, p_rel) ->
@@ -461,7 +460,6 @@ module Elem : sig
   val elems : string -> elems Or_error.t
 
   val item_to_elem : (_,_) item -> elem
-  val path_to_elems : _ t -> elems
 
   val rel_dir_of_elems : elems -> rel_dir Or_error.t
   val abs_dir_of_elems : elems -> abs_dir Or_error.t
@@ -496,10 +494,6 @@ end = struct
     | Link (x,_) -> x
     | Dot -> "."
     | Dotdot -> ".."
-
-  let rec path_to_elems : type a b . (a,b) t -> elems = function
-    | Item i -> [ item_to_elem i ]
-    | Cons (x, y) -> (item_to_elem x) :: (path_to_elems y)
 
   let rel_dir_of_elems elems : rel_dir Or_error.t =
     match elems with
