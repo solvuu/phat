@@ -14,7 +14,7 @@ build: [
 depends: [
   "core_kernel" {>= "v0.9.0"}
   "jbuilder" {build}
-  "ounit" {test}
+  "ppx_jane"
 ]
 
 ocaml-version: [ >= "4.01.0" ]

@@ -14,8 +14,9 @@ build: [
 depends: [
   "async" {>= "v0.9.0"}
   "jbuilder" {build}
-  "ounit" {test}
+  "ounit" # {test} TODO: Make ounit a dependency only if running tests.
   "phat-base"
+  "ppx_jane"
 ]
 
 ocaml-version: [ >= "4.01.0" ]
