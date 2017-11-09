@@ -5,3 +5,7 @@ all:
 .PHONY: clean
 clean:
 	jbuilder clean
+
+.PHONY: docker
+docker:
+	docker build -t phat .
