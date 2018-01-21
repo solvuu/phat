@@ -31,7 +31,7 @@ end
 (******************************************************************************)
 let tree : Command.t =
   let open Command.Let_syntax in
-  Command.async_or_error'
+  Command.async_or_error
     ~summary:"print a directory tree"
     [%map_open
       let log_level = Param.log_level
