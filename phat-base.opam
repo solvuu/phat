@@ -12,9 +12,9 @@ build: [
 ]
 
 depends: [
-  "core_kernel" {>= "v0.9.0"}
+  "core_kernel" {>= "v0.10.0"}
   "jbuilder" {build}
   "ppx_jane"
 ]
 
-ocaml-version: [ >= "4.01.0" ]
+ocaml-version: [ >= "4.06.0" ]
