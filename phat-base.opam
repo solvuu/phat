@@ -12,7 +12,7 @@ build: [
 ]
 
 depends: [
-  "core_kernel" {>= "v0.10.0"}
+  "core_kernel" {>= "v0.11.0"}
   "jbuilder" {build}
   "ppx_jane"
 ]
