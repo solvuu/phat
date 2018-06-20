@@ -494,7 +494,7 @@ let filesys_mkdir ctx =
     )
 
 let fold_works_on_test_directory ctx =
-  let expected = List.sort ~cmp:compare (PW Phat.dot :: test_directory_description) in
+  let expected = List.sort ~compare (PW Phat.dot :: test_directory_description) in
   let tmpdir_as_str = OUnit2.bracket_tmpdir ctx in
   let tmpdir = ok_exn (Phat.abs_dir tmpdir_as_str) in
   let pw_of_elt =
@@ -509,7 +509,7 @@ let fold_works_on_test_directory ctx =
       return ((pw_of_elt elt) :: accu)
     )
   >>| function
-  | Ok l -> assert_equal ~printer:(List.to_string ~f:to_string) expected (List.sort ~cmp:compare l)
+  | Ok l -> assert_equal ~printer:(List.to_string ~f:to_string) expected (List.sort ~compare l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
 
@@ -557,7 +557,7 @@ let fold_follows_links_works_on_test_directory ctx =
     in
     (`Dir tmpdir) :: List.map test_directory_description ~f
   in
-  let expected = List.sort ~cmp:compare description in
+  let expected = List.sort ~compare description in
   let map_elts = function
     | `File (_,f) -> `File f
     | `Dir (_, d) -> `Dir d
@@ -573,7 +573,7 @@ let fold_follows_links_works_on_test_directory ctx =
       return (map_elts elt :: accu)
     )
   >>| function
-  | Ok l -> assert_equal ~printer:(fun xs -> String.concat ~sep:"\n" (List.map xs ~f:to_string)) expected (List.sort ~cmp:compare l)
+  | Ok l -> assert_equal ~printer:(fun xs -> String.concat ~sep:"\n" (List.map xs ~f:to_string)) expected (List.sort ~compare l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
 let suite = "Phat test suite" >::: [
