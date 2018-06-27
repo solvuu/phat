@@ -1,7 +1,7 @@
 (** Extension of Core. Open this module after opening [Core] to
     extend Core with additional functionality.
 *)
-open Core_kernel.Std
+open Core_kernel
 
 module Result : sig
   include module type of Result

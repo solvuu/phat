@@ -1,4 +1,4 @@
-open Core_kernel.Std
+open Core_kernel
 open Core2
 open Result.Monad_infix
 

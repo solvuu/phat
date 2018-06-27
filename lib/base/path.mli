@@ -1,5 +1,5 @@
 (** Filesystem paths. *)
-open Core_kernel.Std
+open Core_kernel
 
 (** User chosen file or directory name. By "user chosen" we mean to
     exclude reserved names such as ".", "", "..", and "/". *)
