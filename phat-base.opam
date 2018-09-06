@@ -8,12 +8,12 @@ license: "ISC"
 tags: ["org:solvuu"]
 
 build: [
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 
 depends: [
   "core_kernel" {>= "v0.11.0"}
-  "jbuilder" {build}
+  "dune" {build}
   "ppx_jane"
 ]
 
