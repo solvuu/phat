@@ -8,12 +8,12 @@ license: "ISC"
 tags: ["org:solvuu"]
 
 build: [
-  ["jbuilder" "build" "-p" name "-j" jobs]
+  ["dune" "build" "-p" name "-j" jobs]
 ]
 
 depends: [
   "async" {>= "v0.11.0"}
-  "jbuilder" {build}
+  "dune" {build}
   "ounit" # {test} TODO: Make ounit a dependency only if running tests.
   "phat-base"
   "ppx_jane"
