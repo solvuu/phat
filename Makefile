@@ -1,10 +1,10 @@
 .PHONY: all
 all:
-	jbuilder build @install --dev
+	dune build @install
 
 .PHONY: clean
 clean:
-	jbuilder clean
+	dune clean
 
 .PHONY: docker
 docker:
