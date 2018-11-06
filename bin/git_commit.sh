@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 # Print git commit to stdout in OCaml notation.
 
