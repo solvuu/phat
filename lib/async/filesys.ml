@@ -72,7 +72,7 @@ module U = struct
 
   let symlink link_path ~targets:link_target =
     wrap [%here] (fun () ->
-        Unix.symlink ~dst:link_path ~src:link_target
+        Unix.symlink ~target:link_path ~link_name:link_target
       )
 
   let realpath x =
@@ -139,7 +139,7 @@ let exists_as_link p target =
       | `Unknown -> return `Unknown
       | `Yes ->
         Unix.readlink p >>| fun target_on_fs ->
-        if target = target_on_fs then `Yes
+        if String.equal target target_on_fs then `Yes
         else `Yes_as_other_object
     )
 
@@ -452,7 +452,7 @@ let iter start ~f =
 
 module Wrapped_path = struct
   type t = P : (_,_) Path.t -> t
-  let compare = Pervasives.compare
+  let compare = Poly.compare
   let t_of_sexp _ = assert false
   let sexp_of_t _ = assert false
 end

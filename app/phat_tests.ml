@@ -69,7 +69,7 @@ module NR = struct
 
   and rel_file_item ~link_level ~root ~level () =
     let no_link = link_level <= 0 in
-    if no_link || Random.float 1. > 0.1 then
+    if no_link || Float.( > ) (Random.float 1.) 0.1 then
       Phat.File (new_name ())
     else (
       Phat.map_any_kind
@@ -92,8 +92,8 @@ module NR = struct
 
   and rel_dir_path ?(no_dot = false) ~link_level ~root ~level () =
     let d = rel_dir_item ~no_dot ~link_level ~root ~level () in
-    if Random.float 1. < 0.6 then
-      let no_dot = no_dot || d <> Phat.Dotdot in
+    if Float.( < ) (Random.float 1.) 0.6 then
+      let no_dot = no_dot || Poly.( <> ) d Phat.Dotdot in
       let level = update_level_item ~root level d in
       Phat.Cons (d, rel_dir_path ~no_dot ~link_level ~root ~level ())
     else
@@ -126,7 +126,7 @@ module R = struct
 
   and rel_file_item ~link_level ~root ~level () =
     let no_link = link_level <= 0 in
-    if no_link || Random.float 1. > 0.1 then
+    if no_link || Float.( > ) (Random.float 1.) 0.1 then
       Phat.File (new_name ())
     else (
       Phat.map_any_kind
@@ -149,7 +149,7 @@ module R = struct
 
   and rel_dir_path ~link_level ~root ~level () =
     let d = rel_dir_item ~link_level ~root ~level () in
-    if Random.float 1. < 0.6 then
+    if Float.( < ) (Random.float 1.) 0.6 then
       let level = update_level_item ~root level d in
       Phat.Cons (d, rel_dir_path ~link_level ~root ~level ())
     else
@@ -169,7 +169,7 @@ module R = struct
     let link = Phat.map_any_kind p { Phat.map = fun p ->
         Phat.Link (new_name (), p)
       } in
-    if Random.float 1. < 0.1 then
+    if Float.( < ) (Random.float 1.) 0.1 then
       `Rel (Phat.Item link)
     else
       match dir_path ~link_level ~root ~level () with
@@ -248,7 +248,7 @@ let normalization_is_idempotent _ =
         (string_of_path p_norm)
         (string_of_path p_norm_norm)
     in
-    assert_bool msg (p_norm = p_norm_norm)
+    assert_bool msg (Poly.( = ) p_norm p_norm_norm)
   in
   for _ = 1 to 1000 do
     Phat.map_any_kind (R.dir_path ~link_level:4 ~root:Phat.root ~level:0 ()) { Phat.map = check }
@@ -266,7 +266,7 @@ let resolution_for_eventually_abs_paths _ =
     assert_failure msg
   in
   let check p_ref p p_res =
-    if p_ref <> p_res then failure p_ref p p_res
+    if Poly.( <> ) p_ref p_res then failure p_ref p p_res
   in
   for _ = 1 to 1000 do
     let p_ref = R.abs_dir_path ~link_level:0 () in
@@ -289,7 +289,7 @@ let resolution_is_identity_for_paths_without_links _ =
     assert_failure msg
   in
   let check dir dir' =
-    if dir <> dir' then failure dir dir'
+    if Poly.( <> ) dir dir' then failure dir dir'
   in
   for _ = 1 to 1000 do
     match R.dir_path ~root:Phat.root ~level:0 ~link_level:0 () with
@@ -320,9 +320,9 @@ let create_test_directory path =
   Unix.mkdir (f "foo") >>= fun () ->
   Unix.mkdir (f "foo/bar") >>= fun () ->
   Writer.save (f "foo/bar/baz") ~contents:"baz" >>= fun () ->
-  Unix.symlink ~src:"foo/bar/baz" ~dst:(f "qux") >>= fun () ->
-  Unix.symlink ~src:".." ~dst:(f "foo/bar/norf") >>= fun () ->
-  Unix.symlink ~src:"foo/bar/booz" ~dst:(f "broken")
+  Unix.symlink ~link_name:"foo/bar/baz" ~target:(f "qux") >>= fun () ->
+  Unix.symlink ~link_name:".." ~target:(f "foo/bar/norf") >>= fun () ->
+  Unix.symlink ~link_name:"foo/bar/booz" ~target:(f "broken")
 
 type path_wrapper = PW : (Phat.rel,_) Phat.t -> path_wrapper
 
@@ -494,7 +494,7 @@ let filesys_mkdir ctx =
     )
 
 let fold_works_on_test_directory ctx =
-  let expected = List.sort ~compare (PW Phat.dot :: test_directory_description) in
+  let expected = List.sort ~compare:Poly.compare (PW Phat.dot :: test_directory_description) in
   let tmpdir_as_str = OUnit2.bracket_tmpdir ctx in
   let tmpdir = ok_exn (Phat.abs_dir tmpdir_as_str) in
   let pw_of_elt =
@@ -509,7 +509,7 @@ let fold_works_on_test_directory ctx =
       return ((pw_of_elt elt) :: accu)
     )
   >>| function
-  | Ok l -> assert_equal ~printer:(List.to_string ~f:to_string) expected (List.sort ~compare l)
+  | Ok l -> assert_equal ~printer:(List.to_string ~f:to_string) expected (List.sort ~compare:Poly.compare l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
 
@@ -526,7 +526,7 @@ let reify_directory ctx =
       | Ok () -> (
           Phat.abs_dir p_str |> ok_exn |> Phat.reify >>= function
           | Ok q -> (
-              if p <> q then (
+              if Poly.( <> ) p q then (
                 Process.run ~prog:"tree" ~args:[ tmpdir ] () >>| ok_exn >>| fun stdout ->
                 let msg = sprintf "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n\n%s\n" stdout (string_hum_of_path p) (string_hum_of_path q) in
                 assert_failure msg
@@ -557,7 +557,7 @@ let fold_follows_links_works_on_test_directory ctx =
     in
     (`Dir tmpdir) :: List.map test_directory_description ~f
   in
-  let expected = List.sort ~compare description in
+  let expected = List.sort ~compare:Poly.compare description in
   let map_elts = function
     | `File (_,f) -> `File f
     | `Dir (_, d) -> `Dir d
@@ -573,7 +573,7 @@ let fold_follows_links_works_on_test_directory ctx =
       return (map_elts elt :: accu)
     )
   >>| function
-  | Ok l -> assert_equal ~printer:(fun xs -> String.concat ~sep:"\n" (List.map xs ~f:to_string)) expected (List.sort ~compare l)
+  | Ok l -> assert_equal ~printer:(fun xs -> String.concat ~sep:"\n" (List.map xs ~f:to_string)) expected (List.sort ~compare:Poly.compare l)
   | Error _ -> assert_failure "Fold failed on test directory"
 
 let suite = "Phat test suite" >::: [
