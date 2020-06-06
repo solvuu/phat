@@ -37,6 +37,7 @@ let tree : Command.t =
       let log_level = Param.log_level
       and dir = Param.(anon ("DIR" %: string)) in
       fun () ->
+        let open Async in
         Log.Global.set_level log_level;
         (
           Deferred.return (Path.dir_of_any_kind dir) >>=? function

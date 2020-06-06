@@ -151,7 +151,7 @@ and file_of_any_kind_of_sexp sexp : file of_any_kind =
 let name s =
   if String.mem s '/' then
     errorh [%here] "slash not allowed in file or directory name" s sexp_of_string
-  else if s = "." || s = ".." || s = "" then
+  else if String.equal s "." || String.equal s ".." || String.equal s "" then
     errorh [%here] "invalid file or directory name" s sexp_of_string
   else
     Ok s
@@ -313,11 +313,11 @@ and normalize_item
 
 let equal
   : type a b. (a,b) t -> (a,b) t -> bool
-  = fun p q -> normalize p = normalize q
+  = fun p q -> Poly.( = ) (normalize p) (normalize q)
 
 let compare
   : type a b. (a,b) t -> (a,b) t -> int
-  = fun p q -> compare (normalize p) (normalize q)
+  = fun p q -> Poly.compare (normalize p) (normalize q)
 
 module Infix = struct
   let ( / ) = concat
@@ -332,13 +332,13 @@ module Make_relative = struct
     = fun p1 p2 ->
       match p1, p2 with
       | Item i1, Item i2 ->
-        if i1 = i2 then None, None else Some p1, Some p2
+        if Poly.( = ) i1 i2 then None, None else Some p1, Some p2
       | Item i1, Cons (i2, q2) ->
-        if i1 = i2 then None, Some q2 else Some p1, Some p2
+        if Poly.( = ) i1 i2 then None, Some q2 else Some p1, Some p2
       | Cons (i1, q1), Item i2 ->
-        if i1 = i2 then Some q1, None else Some p1, Some p2
+        if Poly.( = ) i1 i2 then Some q1, None else Some p1, Some p2
       | Cons (i1, q1), Cons (i2, q2) ->
-        if i1 = i2 then skip_common_prefix q1 q2 else Some p1, Some p2
+        if Poly.( = ) i1 i2 then skip_common_prefix q1 q2 else Some p1, Some p2
 
   let rec backwards
     : type k. (k, dir) t -> (rel, dir) t option
