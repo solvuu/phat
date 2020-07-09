@@ -3,18 +3,17 @@
    The workaround would require manually copying too much code. *)
 open Core
 open Async
-
 include Phat_base__Path
 
-let abs_file_of_any ?(base_dir:abs_dir option) (x:string)
-  : abs_file Or_error.t Deferred.t
+let abs_file_of_any ?(base_dir : abs_dir option) (x : string)
+    : abs_file Or_error.t Deferred.t
   =
   match file_of_any_kind x with
   | Error _ as e -> return e
   | Ok (`Abs x) -> return (Ok x)
   | Ok (`Rel x) ->
     (match base_dir with
-     | Some x -> return (Ok x)
-     | None -> Unix.getcwd() >>| abs_dir
-    ) >>|? fun base_dir ->
-    concat base_dir x
+    | Some x -> return (Ok x)
+    | None -> Unix.getcwd () >>| abs_dir)
+    >>|? fun base_dir -> concat base_dir x
+;;
