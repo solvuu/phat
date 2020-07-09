@@ -6,62 +6,64 @@ open Core_kernel
 type name = private string [@@deriving sexp]
 
 (** Indicate whether a path is absolute or relative. *)
-type abs = [`Abs]
-type rel = [`Rel]
+type abs = [ `Abs ]
+
+type rel = [ `Rel ]
 
 (** Indicate the type of file, i.e. a regular file or directory. *)
-type file = [`File]
-type dir  = [`Dir]
-type link = [`Link]
+type file = [ `File ]
 
-type ('kind,'typ) item =
-  | Root : (abs,dir) item
-  | File : name -> (rel,file) item
-  | Dir : name -> (rel,dir) item
-  | Link : name * (_,'typ) t -> (rel,'typ) item
+type dir = [ `Dir ]
+type link = [ `Link ]
+
+type ('kind, 'typ) item =
+  | Root : (abs, dir) item
+  | File : name -> (rel, file) item
+  | Dir : name -> (rel, dir) item
+  | Link : name * (_, 'typ) t -> (rel, 'typ) item
   | Broken_link : name * string list -> (rel, link) item
-  | Dot : (rel,dir) item
-  | Dotdot : (rel,dir) item
+  | Dot : (rel, dir) item
+  | Dotdot : (rel, dir) item
 
-and ('kind,'typ) t =
-  | Item : ('kind,'typ) item -> ('kind,'typ) t
-  | Cons : ('kind,dir) item * (rel,'typ) t -> ('kind,'typ) t
+and ('kind, 'typ) t =
+  | Item : ('kind, 'typ) item -> ('kind, 'typ) t
+  | Cons : ('kind, dir) item * (rel, 'typ) t -> ('kind, 'typ) t
 
-type 'typ item_of_any_kind = [
-  | `Abs of (abs,'typ) item
-  | `Rel of (rel,'typ) item
-]
+type 'typ item_of_any_kind =
+  [ `Abs of (abs, 'typ) item
+  | `Rel of (rel, 'typ) item
+  ]
 
-type 'typ of_any_kind = [
-  | `Abs of (abs,'typ) t
-  | `Rel of (rel,'typ) t
-]
+type 'typ of_any_kind =
+  [ `Abs of (abs, 'typ) t
+  | `Rel of (rel, 'typ) t
+  ]
 
-type 'kind of_any_typ = [
-  | `File of ('kind, file) t
+type 'kind of_any_typ =
+  [ `File of ('kind, file) t
   | `Link of ('kind, link) t
   | `Dir of ('kind, dir) t
-]
+  ]
 
-type abs_file = (abs,file) t [@@deriving sexp]
-type rel_file = (rel,file) t [@@deriving sexp]
-type abs_dir = (abs,dir) t [@@deriving sexp]
-type rel_dir = (rel,dir) t [@@deriving sexp]
+type abs_file = (abs, file) t [@@deriving sexp]
+type rel_file = (rel, file) t [@@deriving sexp]
+type abs_dir = (abs, dir) t [@@deriving sexp]
+type rel_dir = (rel, dir) t [@@deriving sexp]
 
-val equal : ('kind,'typ) t -> ('kind,'typ) t -> bool
-val compare : ('kind,'typ) t -> ('kind,'typ) t -> int
-
+val equal : ('kind, 'typ) t -> ('kind, 'typ) t -> bool
+val compare : ('kind, 'typ) t -> ('kind, 'typ) t -> int
 
 (** {2 Constructors} *)
 
 (** Unix root directory "/". *)
 val root : abs_dir
+
 val file : name -> rel_file
 val file_exn : string -> rel_file
 val dir : name -> rel_dir
 val dir_exn : string -> rel_dir
-val link : name -> (_,'o) t -> (rel, 'o) t
-val link_exn : string -> (_,'o) t -> (rel, 'o) t
+val link : name -> (_, 'o) t -> (rel, 'o) t
+val link_exn : string -> (_, 'o) t -> (rel, 'o) t
 val dot : rel_dir
 val dotdot : rel_dir
 val broken_link : name -> string list -> (rel, link) t
@@ -69,6 +71,7 @@ val broken_link_exn : string -> string list -> (rel, link) t
 
 (** Parse a name. *)
 val name : string -> name Or_error.t
+
 val name_exn : string -> name
 
 (** Parse an absolute directory path. *)
@@ -89,7 +92,6 @@ val file_of_any_kind : string -> file of_any_kind Or_error.t
 (** Parse an absolute or relative dir path. *)
 val dir_of_any_kind : string -> dir of_any_kind Or_error.t
 
-
 (** {2 Deconstructors} *)
 
 val last_item : (rel, 'o) t -> (rel, 'o) item
@@ -97,7 +99,6 @@ val to_list : (_, _) t -> string list
 val to_string : (_, _) t -> string
 val sexp_of_t : (_, _) t -> Sexp.t
 val string_of_item : (_, _) item -> string
-
 
 (** {2 Visitors} *)
 
@@ -110,19 +111,14 @@ val has_link : (_, _) t -> bool
 
 type ('typ, 'a) map_any_kind = { map : 'kind. ('kind, 'typ) t -> 'a }
 
-val map_any_kind : 'typ of_any_kind -> ('typ,'a) map_any_kind -> 'a
-
+val map_any_kind : 'typ of_any_kind -> ('typ, 'a) map_any_kind -> 'a
 val kind_of : (_, 'typ) t -> 'typ of_any_kind
-
 val typ_of : ('kind, _) t -> 'kind of_any_typ
-
 
 (** {2 Operators} *)
 
 val normalize : ('kind, 'typ) t -> ('kind, 'typ) t
-
 val concat : ('kind, dir) t -> (rel, 'typ) t -> ('kind, 'typ) t
-
 val cons : ('k, dir) t -> (rel, 't) item -> ('k, 't) t
 
 (** Follow all links. Returned value guaranteed not to contain any
@@ -130,7 +126,6 @@ val cons : ('k, dir) t -> (rel, 't) item -> ('k, 't) t
 val resolve : (abs, 'typ) t -> (abs, 'typ) t
 
 val resolve_any_kind : ('kind, 'typ) t -> 'typ of_any_kind
-
 val parent : ('kind, _) t -> ('kind, dir) t
 
 module Infix : sig
@@ -157,10 +152,10 @@ objects at the same location in the filesystem.
 *)
 val make_relative : (abs, 'typ) t -> from:(abs, dir) t -> (rel, 'typ) t
 
-val last : (_,'typ) t -> 'typ item_of_any_kind
 (** Return last item in path. If path is [Item Root], the returned
     item is absolute, else it is relative. See also {!last_of_rel}.
 *)
+val last : (_, 'typ) t -> 'typ item_of_any_kind
 
-val last_of_rel : (rel,'typ) t -> (rel,'typ) item
 (** Return last item in a relative path. *)
+val last_of_rel : (rel, 'typ) t -> (rel, 'typ) item
