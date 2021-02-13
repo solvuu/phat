@@ -287,6 +287,15 @@ let compare : type a b. (a, b) t -> (a, b) t -> int =
  fun p q -> Poly.compare (normalize p) (normalize q)
 ;;
 
+let equal_abs_file = equal
+let compare_abs_file = compare
+let equal_rel_file = equal
+let compare_rel_file = compare
+let equal_abs_dir = equal
+let compare_abs_dir = compare
+let equal_rel_dir = equal
+let compare_rel_dir = compare
+
 module Infix = struct
   let ( / ) = concat
 end

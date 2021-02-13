@@ -45,10 +45,10 @@ type 'kind of_any_typ =
   | `Dir of ('kind, dir) t
   ]
 
-type abs_file = (abs, file) t [@@deriving sexp]
-type rel_file = (rel, file) t [@@deriving sexp]
-type abs_dir = (abs, dir) t [@@deriving sexp]
-type rel_dir = (rel, dir) t [@@deriving sexp]
+type abs_file = (abs, file) t [@@deriving sexp, compare, equal]
+type rel_file = (rel, file) t [@@deriving sexp, compare, equal]
+type abs_dir = (abs, dir) t [@@deriving sexp, compare, equal]
+type rel_dir = (rel, dir) t [@@deriving sexp, compare, equal]
 
 val equal : ('kind, 'typ) t -> ('kind, 'typ) t -> bool
 val compare : ('kind, 'typ) t -> ('kind, 'typ) t -> int
