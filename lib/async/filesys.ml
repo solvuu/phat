@@ -39,9 +39,7 @@ module U = struct
   (** Async's [file_exists] has a
       {{:https://github.com/janestreet/async_unix/issues/6}bug} that
       doesn't allow setting follow_symlinks to false. *)
-  let file_exists x =
-    In_thread.run (fun () -> Core.Sys.file_exists ~follow_symlinks:false x)
-  ;;
+  let file_exists x = In_thread.run (fun () -> Sys.file_exists ~follow_symlinks:false x)
 
   let is_file x = Sys.is_file ~follow_symlinks:false x
   let is_directory x = Sys.is_directory ~follow_symlinks:false x
@@ -140,7 +138,7 @@ let rec exists : type typ. (Path.abs, typ) Path.t -> exists_answer Deferred.t =
     U.file_exists "/" >>| exists_answer >>= and_check (exists_rel_path root) p_rel
 
 and exists_item
-    : type typ. Path.abs_dir -> (Path.rel, typ) Path.item -> exists_answer Deferred.t
+  : type typ. Path.abs_dir -> (Path.rel, typ) Path.item -> exists_answer Deferred.t
   =
  fun p_abs item ->
   match item with
@@ -153,8 +151,8 @@ and exists_item
       let target_as_str = Filename.of_parts target in
       U.file_exists
         (match target with
-        | "/" :: _ -> target_as_str
-        | _ -> Filename.concat (Path.to_string p_abs) target_as_str)
+         | "/" :: _ -> target_as_str
+         | _ -> Filename.concat (Path.to_string p_abs) target_as_str)
       >>| (function
             | `Yes -> `No
             | `No -> `Yes
@@ -173,7 +171,7 @@ and exists_item
     >>= and_check target_exists target
 
 and exists_rel_path
-    : type typ. Path.abs_dir -> (Path.rel, typ) Path.t -> exists_answer Deferred.t
+  : type typ. Path.abs_dir -> (Path.rel, typ) Path.t -> exists_answer Deferred.t
   =
  fun p_abs p_rel ->
   match p_rel with
@@ -259,10 +257,10 @@ let rec reify : type o. (Path.abs, o) Path.t -> (Path.abs, o) Path.t Deferred.Or
     | Path.Cons (Path.Root, p_rel) -> reify_aux Path.root p_rel)
 
 and reify_aux
-    : type o.
-      (Path.abs, Path.dir) Path.t
-      -> (Path.rel, o) Path.t
-      -> (Path.abs, o) Path.t Deferred.Or_error.t
+  : type o.
+    (Path.abs, Path.dir) Path.t
+    -> (Path.rel, o) Path.t
+    -> (Path.abs, o) Path.t Deferred.Or_error.t
   =
  fun p_abs p_rel ->
   match p_rel with
@@ -270,10 +268,10 @@ and reify_aux
   | Path.Cons (h, t) -> reify_aux_item p_abs h >>=? fun p_abs' -> reify_aux p_abs' t
 
 and reify_aux_item
-    : type o.
-      (Path.abs, Path.dir) Path.t
-      -> (Path.rel, o) Path.item
-      -> (Path.abs, o) Path.t Deferred.Or_error.t
+  : type o.
+    (Path.abs, Path.dir) Path.t
+    -> (Path.rel, o) Path.item
+    -> (Path.abs, o) Path.t Deferred.Or_error.t
   =
  fun p_abs item ->
   let p = Path.cons p_abs item in
@@ -306,12 +304,12 @@ and reify_aux_item
   | Path.Dotdot -> Deferred.Or_error.return p
 
 and reify_link
-    : type o.
-      (string -> o Path.of_any_kind Or_error.t)
-      -> (Path.abs, Path.dir) Path.t
-      -> Path.name
-      -> string
-      -> (Path.abs, o) Path.t Deferred.Or_error.t
+  : type o.
+    (string -> o Path.of_any_kind Or_error.t)
+    -> (Path.abs, Path.dir) Path.t
+    -> Path.name
+    -> string
+    -> (Path.abs, o) Path.t Deferred.Or_error.t
   =
  fun parse p_abs n p_str ->
   Unix.readlink p_str
@@ -364,15 +362,15 @@ let rec fold_aux p_abs p_rel obj ~f ~init =
     Sys.readdir subdir_as_str
     >>= fun dir_contents ->
     Deferred.Array.fold dir_contents ~init:accu ~f:(fun accu obj ->
-        let obj_as_str = Filename.concat subdir_as_str obj in
-        let n = Path.name_exn obj in
-        Unix.(lstat obj_as_str)
-        >>= fun stats ->
-        (match stats.Unix.Stats.kind with
-        | `File | `Block | `Char | `Fifo | `Socket -> return (`File (Path.File n))
-        | `Directory -> return (`Dir (Path.Dir n))
-        | `Link -> discover_link subdir subdir_as_str n >>| fun obj -> `Link obj)
-        >>= fun item -> fold_aux p_abs (Path.cons p_rel subdir_item) item ~f ~init:accu)
+      let obj_as_str = Filename.concat subdir_as_str obj in
+      let n = Path.name_exn obj in
+      Unix.(lstat obj_as_str)
+      >>= fun stats ->
+      (match stats.Unix.Stats.kind with
+       | `File | `Block | `Char | `Fifo | `Socket -> return (`File (Path.File n))
+       | `Directory -> return (`Dir (Path.Dir n))
+       | `Link -> discover_link subdir subdir_as_str n >>| fun obj -> `Link obj)
+      >>= fun item -> fold_aux p_abs (Path.cons p_rel subdir_item) item ~f ~init:accu)
 
 and discover_link dir dir_as_str n =
   let link_as_str = Filename.concat dir_as_str (n : Path.name :> string) in
@@ -436,7 +434,7 @@ end
    - [obj] refers to an existing object
  *)
 let rec fold_follows_links_aux visited obj ~f ~(init : 'a)
-    : ('a * WPS.t) Deferred.Or_error.t
+  : ('a * WPS.t) Deferred.Or_error.t
   =
   let realpath : type o. (Path.abs, o) Path.t -> (Path.abs, o) Path.t DOR.t =
    fun p ->
@@ -473,25 +471,25 @@ let rec fold_follows_links_aux visited obj ~f ~(init : 'a)
         >>| Array.to_list
         >>= fun dir_contents ->
         Deferred.Or_error.List.fold dir_contents ~init ~f:(fun (accu, visited) obj ->
-            let obj_as_str = Filename.concat dir_str obj in
-            let n = Path.name_exn obj in
-            (* the objects exists, so it has a legal name *)
-            Unix.(lstat obj_as_str)
-            >>= fun stats ->
-            match stats.Unix.Stats.kind with
-            | `File | `Block | `Char | `Fifo | `Socket ->
-              let next_obj = `File (Path.cons dir (Path.File n)) in
-              fold_follows_links_aux visited next_obj ~f ~init:accu
-            | `Directory ->
-              let next_obj = `Dir (Path.cons dir (Path.Dir n)) in
-              fold_follows_links_aux visited next_obj ~f ~init:accu
-            | `Link ->
-              discover_link dir dir_str n
-              >>| (function
-                    | `File f -> `File (Path.cons dir f)
-                    | `Dir d -> `Dir (Path.cons dir d)
-                    | `Broken_link bl -> `Broken_link (Path.cons dir bl))
-              >>= fun next_obj -> fold_follows_links_aux visited next_obj ~f ~init:accu))
+          let obj_as_str = Filename.concat dir_str obj in
+          let n = Path.name_exn obj in
+          (* the objects exists, so it has a legal name *)
+          Unix.(lstat obj_as_str)
+          >>= fun stats ->
+          match stats.Unix.Stats.kind with
+          | `File | `Block | `Char | `Fifo | `Socket ->
+            let next_obj = `File (Path.cons dir (Path.File n)) in
+            fold_follows_links_aux visited next_obj ~f ~init:accu
+          | `Directory ->
+            let next_obj = `Dir (Path.cons dir (Path.Dir n)) in
+            fold_follows_links_aux visited next_obj ~f ~init:accu
+          | `Link ->
+            discover_link dir dir_str n
+            >>| (function
+                  | `File f -> `File (Path.cons dir f)
+                  | `Dir d -> `Dir (Path.cons dir d)
+                  | `Broken_link bl -> `Broken_link (Path.cons dir bl))
+            >>= fun next_obj -> fold_follows_links_aux visited next_obj ~f ~init:accu))
   | `Broken_link (bl : (Path.abs, Path.link) Path.t) ->
     visit (fun x -> `Broken_link x) bl DOR.return
 ;;

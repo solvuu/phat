@@ -1,4 +1,4 @@
-open Core_kernel
+open Core
 
 module Result = struct
   include Result
@@ -14,9 +14,9 @@ module Result = struct
         let the_fun () =
           let run () =
             List.mapi l ~f:(fun i x ->
-                match f i x with
-                | Ok o -> o
-                | Error e -> raise (E e))
+              match f i x with
+              | Ok o -> o
+              | Error e -> raise (E e))
           in
           try Ok (run ()) with
           | E e -> Error e
@@ -34,9 +34,9 @@ module Result = struct
 
         let helper () =
           List.foldi l ~init ~f:(fun i accum x ->
-              match f i accum x with
-              | Ok x -> x
-              | Error e -> raise (E e))
+            match f i accum x with
+            | Ok x -> x
+            | Error e -> raise (E e))
         ;;
       end
       in

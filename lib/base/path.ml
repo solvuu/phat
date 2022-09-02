@@ -1,4 +1,4 @@
-open Core_kernel
+open Core
 open Core2
 open Result.Monad_infix
 
@@ -302,7 +302,7 @@ end
 
 module Make_relative = struct
   let rec skip_common_prefix
-      : (rel, dir) t -> (rel, dir) t -> (rel, dir) t option * (rel, dir) t option
+    : (rel, dir) t -> (rel, dir) t -> (rel, dir) t option * (rel, dir) t option
     =
    fun p1 p2 ->
     match p1, p2 with
