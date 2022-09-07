@@ -35,12 +35,7 @@ let and_check f x e =
 
 module U = struct
   let wrap loc f = try_with f >>| Or_error.of_exn_result >>| Or_error.tag_loc loc
-
-  (** Async's [file_exists] has a
-      {{:https://github.com/janestreet/async_unix/issues/6}bug} that
-      doesn't allow setting follow_symlinks to false. *)
-  let file_exists x = In_thread.run (fun () -> Sys.file_exists ~follow_symlinks:false x)
-
+  let file_exists x = Sys.file_exists ~follow_symlinks:false x
   let is_file x = Sys.is_file ~follow_symlinks:false x
   let is_directory x = Sys.is_directory ~follow_symlinks:false x
 
@@ -62,7 +57,9 @@ module U = struct
     wrap [%here] (fun () -> Unix.symlink ~target:link_path ~link_name:link_target)
   ;;
 
-  let realpath x = wrap [%here] (fun () -> In_thread.run (fun () -> Filename.realpath x))
+  let realpath x =
+    wrap [%here] (fun () -> In_thread.run (fun () -> Filename_unix.realpath x))
+  ;;
 end
 
 let exists_as_file p =
@@ -297,7 +294,7 @@ and reify_aux_item
       >>=? fun p -> Path.cons p_abs (Path.Link (n, f p)) |> Deferred.Or_error.return
     in
     match Path.kind_of target with
-    | `Abs p -> k ident p
+    | `Abs p -> k Fn.id p
     | `Rel p_rel -> k (Path.make_relative ~from:p_abs) Path.(concat p_abs p_rel))
   | Path.Broken_link _ -> Deferred.Or_error.return p
   | Path.Dot -> Deferred.Or_error.return p
