@@ -1,7 +1,7 @@
 (library
-  (name phat_async)
-  (public_name phat-async)
-  (synopsis "Strongly typed file path and file system operations.")
-  (libraries phat-base async)
-  (preprocess (pps ppx_jane))
-)
+ (name phat_async)
+ (public_name phat-async)
+ (synopsis "Strongly typed file path and file system operations.")
+ (libraries phat-base async core_unix.filename_unix)
+ (preprocess
+  (pps ppx_jane)))
