@@ -20,7 +20,7 @@ let string_of_path x = Sexp.to_string (Phat.sexp_of_t x)
 let string_hum_of_path x = Sexp.to_string_hum (Phat.sexp_of_t x)
 
 let rec update_level
-    : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.t -> int
+  : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.t -> int
   =
  fun ~root l -> function
   | Phat.Item i -> update_level_item ~root l i
@@ -29,7 +29,7 @@ let rec update_level
     update_level ~root l' t
 
 and update_level_item
-    : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.item -> int
+  : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.item -> int
   =
  fun ~root i -> function
   | Phat.Root -> 0
@@ -67,24 +67,10 @@ module NR = struct
     then Phat.Dotdot
     else rel_dir_item ~no_dot ~link_level ~root ~level ()
 
-  and rel_file_item ~link_level ~root ~level () =
-    let no_link = link_level <= 0 in
-    if no_link || Float.( > ) (Random.float 1.) 0.1
-    then Phat.File (new_name ())
-    else
-      Phat.map_any_kind
-        (file_path ~link_level:(link_level - 1) ~root ~level ())
-        { Phat.map = (fun p -> Phat.Link (new_name (), p)) }
-
   and dir_path ~link_level ~root ~level () =
     match Random.bool () with
     | true -> `Abs (abs_dir_path ~link_level ~root ())
     | false -> `Rel (rel_dir_path ~link_level ~root ~level ())
-
-  and file_path ~link_level ~root ~level () =
-    match Random.bool () with
-    | true -> `Abs (abs_file_path ~link_level ~root ())
-    | false -> `Rel (rel_file_path ~link_level ~root ~level ())
 
   and abs_dir_path ~link_level ?(root = Phat.root) () =
     Phat.concat root (rel_dir_path ~link_level ~root ~level:0 ())
@@ -97,14 +83,6 @@ module NR = struct
       let level = update_level_item ~root level d in
       Phat.Cons (d, rel_dir_path ~no_dot ~link_level ~root ~level ()))
     else Phat.Item d
-
-  and abs_file_path ~link_level ?(root = Phat.root) () =
-    Phat.concat root (rel_file_path ~link_level ~root ~level:0 ())
-
-  and rel_file_path ~link_level ~root ~level () =
-    Phat.concat
-      (rel_dir_path ~link_level ~root ~level ())
-      (Phat.Item (rel_file_item ~link_level ~root ~level ()))
   ;;
 end
 
@@ -171,9 +149,6 @@ module R = struct
       match dir_path ~link_level ~root ~level () with
       | `Abs dir -> `Abs (Phat.concat dir (Phat.Item link))
       | `Rel dir -> `Rel (Phat.concat dir (Phat.Item link)))
-
-  and path_with_link ~link_level ~root ~level () =
-    path_resolving_to (dir_path ~link_level ~root ~level ())
   ;;
 end
 
@@ -181,11 +156,11 @@ let not_names = [ "foo/"; "/foo"; "foo/bar"; "."; ".."; "" ]
 
 let name_constructor _ =
   List.iter not_names ~f:(fun n ->
-      match Phat.name n with
-      | Ok _ ->
-        let msg = sprintf "String %s was accepted as a valid name" n in
-        assert_failure msg
-      | Error _ -> ())
+    match Phat.name n with
+    | Ok _ ->
+      let msg = sprintf "String %s was accepted as a valid name" n in
+      assert_failure msg
+    | Error _ -> ())
 ;;
 
 let sexp_serialization _ =
@@ -366,127 +341,125 @@ let filesys_exists_modulo_links ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   deferred_repeat 100 ~f:(fun _ ->
-      Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
-      >>= fun () ->
-      let p = R.abs_dir_path ~link_level:4 ~root:tmpdir_path () in
-      Phat.mkdir p
-      >>= (function
-            | Ok () -> (
-              let q = Phat.abs_dir (Phat.to_string p) |> ok_exn in
-              Phat.exists q
-              >>| function
-              | `Yes_modulo_links -> ()
-              | `Yes ->
-                if Phat.has_link p
-                then (
-                  let msg =
-                    sprintf
-                      "exists sees:\n\n%s\n\nas:\n\n%s\n"
-                      (string_hum_of_path p)
-                      (string_hum_of_path q)
-                  in
-                  assert_failure msg)
-                else ()
-              | `Yes_as_other_object ->
+    Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
+    >>= fun () ->
+    let p = R.abs_dir_path ~link_level:4 ~root:tmpdir_path () in
+    Phat.mkdir p
+    >>= (function
+          | Ok () -> (
+            let q = Phat.abs_dir (Phat.to_string p) |> ok_exn in
+            Phat.exists q
+            >>| function
+            | `Yes_modulo_links -> ()
+            | `Yes ->
+              if Phat.has_link p
+              then (
                 let msg =
                   sprintf
-                    "exists sees:\n\n%s\n\nas another object when given:\n\n%s\n"
+                    "exists sees:\n\n%s\n\nas:\n\n%s\n"
                     (string_hum_of_path p)
                     (string_hum_of_path q)
                 in
-                assert_failure msg
-              | `No | `Unknown ->
-                let msg = sprintf "exists does not see:\n\n%s" (string_hum_of_path p) in
                 assert_failure msg)
-            | Error e ->
+              else ()
+            | `Yes_as_other_object ->
               let msg =
                 sprintf
-                  "mkdir failed to create path %s: %s"
-                  (Sexp.to_string_hum (Phat.sexp_of_t p))
-                  (Sexp.to_string_hum (Error.sexp_of_t e))
+                  "exists sees:\n\n%s\n\nas another object when given:\n\n%s\n"
+                  (string_hum_of_path p)
+                  (string_hum_of_path q)
               in
-              return (ignore (assert_failure msg)))
-      >>= fun () -> Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir))
+              assert_failure msg
+            | `No | `Unknown ->
+              let msg = sprintf "exists does not see:\n\n%s" (string_hum_of_path p) in
+              assert_failure msg)
+          | Error e ->
+            let msg =
+              sprintf
+                "mkdir failed to create path %s: %s"
+                (Sexp.to_string_hum (Phat.sexp_of_t p))
+                (Sexp.to_string_hum (Error.sexp_of_t e))
+            in
+            return (ignore (assert_failure msg)))
+    >>= fun () -> Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir))
 ;;
 
 let filesys_exists_as_other_object ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   deferred_repeat 100 ~f:(fun _ ->
-      Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
-      >>= fun () ->
-      let p =
-        (* This is needed to be sure the string representation of the dir can be parsed as a file *)
-        Phat.(
-          cons (R.abs_dir_path ~link_level:4 ~root:tmpdir_path ()) (Dir (name_exn "foo")))
-      in
-      Phat.mkdir p
-      >>= (function
-            | Ok () -> (
-              let q = Phat.abs_file (Phat.to_string p) |> ok_exn in
-              Phat.exists q
-              >>| function
-              | `Yes_modulo_links | `Yes ->
-                let msg =
-                  sprintf
-                    "exists does not see that:\n\n\
-                     %s\n\n\
-                     and:\n\n\
-                     %s\n\n\
-                     have different types\n"
-                    (string_hum_of_path p)
-                    (string_hum_of_path q)
-                in
-                assert_failure msg
-              | `Yes_as_other_object -> ()
-              | `No | `Unknown ->
-                let msg =
-                  sprintf
-                    "exists does not see:\n\n%s\n\nwhen given:\n\n%s\n"
-                    (string_hum_of_path p)
-                    (string_hum_of_path q)
-                in
-                assert_failure msg)
-            | Error e ->
+    Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
+    >>= fun () ->
+    let p =
+      (* This is needed to be sure the string representation of the dir can be parsed as a file *)
+      Phat.(
+        cons (R.abs_dir_path ~link_level:4 ~root:tmpdir_path ()) (Dir (name_exn "foo")))
+    in
+    Phat.mkdir p
+    >>= (function
+          | Ok () -> (
+            let q = Phat.abs_file (Phat.to_string p) |> ok_exn in
+            Phat.exists q
+            >>| function
+            | `Yes_modulo_links | `Yes ->
               let msg =
                 sprintf
-                  "mkdir failed to create path %s: %s"
-                  (Sexp.to_string_hum (Phat.sexp_of_t p))
-                  (Sexp.to_string_hum (Error.sexp_of_t e))
+                  "exists does not see that:\n\n\
+                   %s\n\n\
+                   and:\n\n\
+                   %s\n\n\
+                   have different types\n"
+                  (string_hum_of_path p)
+                  (string_hum_of_path q)
               in
-              return (ignore (assert_failure msg)))
-      >>= fun () -> Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir))
+              assert_failure msg
+            | `Yes_as_other_object -> ()
+            | `No | `Unknown ->
+              let msg =
+                sprintf
+                  "exists does not see:\n\n%s\n\nwhen given:\n\n%s\n"
+                  (string_hum_of_path p)
+                  (string_hum_of_path q)
+              in
+              assert_failure msg)
+          | Error e ->
+            let msg =
+              sprintf
+                "mkdir failed to create path %s: %s"
+                (Sexp.to_string_hum (Phat.sexp_of_t p))
+                (Sexp.to_string_hum (Error.sexp_of_t e))
+            in
+            return (ignore (assert_failure msg)))
+    >>= fun () -> Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir))
 ;;
 
 let filesys_mkdir ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   deferred_repeat 100 ~f:(fun _ ->
-      Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
-      >>= fun () ->
-      let p = R.abs_dir_path ~root:tmpdir_path ~link_level:4 () in
-      Phat.mkdir p
-      >>= function
-      | Ok () -> (
-        Phat.exists p
-        >>| function
-        | `Yes -> ()
-        | `Yes_modulo_links | `Yes_as_other_object | `No | `Unknown ->
-          let msg =
-            sprintf
-              "mkdir failed to create path %s"
-              (Sexp.to_string_hum (Phat.sexp_of_t p))
-          in
-          assert_failure msg)
-      | Error e ->
+    Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir)
+    >>= fun () ->
+    let p = R.abs_dir_path ~root:tmpdir_path ~link_level:4 () in
+    Phat.mkdir p
+    >>= function
+    | Ok () -> (
+      Phat.exists p
+      >>| function
+      | `Yes -> ()
+      | `Yes_modulo_links | `Yes_as_other_object | `No | `Unknown ->
         let msg =
-          sprintf
-            "mkdir failed to create path:\n\n%s\n\nError:\n\n%s\n\n%s\n"
-            (Sexp.to_string_hum (Phat.sexp_of_t p))
-            (Sexp.to_string_hum (Error.sexp_of_t e))
-            (Sexp.to_string_hum (Phat.sexp_of_t (Phat.resolve p)))
+          sprintf "mkdir failed to create path %s" (Sexp.to_string_hum (Phat.sexp_of_t p))
         in
-        return (ignore (assert_failure msg)))
+        assert_failure msg)
+    | Error e ->
+      let msg =
+        sprintf
+          "mkdir failed to create path:\n\n%s\n\nError:\n\n%s\n\n%s\n"
+          (Sexp.to_string_hum (Phat.sexp_of_t p))
+          (Sexp.to_string_hum (Error.sexp_of_t e))
+          (Sexp.to_string_hum (Phat.sexp_of_t (Phat.resolve p)))
+      in
+      return (ignore (assert_failure msg)))
 ;;
 
 let fold_works_on_test_directory ctx =
@@ -517,48 +490,48 @@ let reify_directory ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   deferred_repeat 100 ~f:(fun _ ->
-      Process.run ~prog:"rm" ~args:[ "-rf"; tmpdir ] ()
-      >>| ok_exn
-      >>= fun _ ->
-      let p = NR.abs_dir_path ~link_level:4 ~root:tmpdir_path () in
-      let p_str = Phat.to_string p in
-      Phat.mkdir p
+    Process.run ~prog:"rm" ~args:[ "-rf"; tmpdir ] ()
+    >>| ok_exn
+    >>= fun _ ->
+    let p = NR.abs_dir_path ~link_level:4 ~root:tmpdir_path () in
+    let p_str = Phat.to_string p in
+    Phat.mkdir p
+    >>= function
+    | Ok () -> (
+      Phat.abs_dir p_str
+      |> ok_exn
+      |> Phat.reify
       >>= function
-      | Ok () -> (
-        Phat.abs_dir p_str
-        |> ok_exn
-        |> Phat.reify
-        >>= function
-        | Ok q ->
-          if Poly.( <> ) p q
-          then
-            Process.run ~prog:"tree" ~args:[ tmpdir ] ()
-            >>| ok_exn
-            >>| fun stdout ->
-            let msg =
-              sprintf
-                "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n\n%s\n"
-                stdout
-                (string_hum_of_path p)
-                (string_hum_of_path q)
-            in
-            assert_failure msg
-          else return ()
-        | Error e ->
+      | Ok q ->
+        if Poly.( <> ) p q
+        then
           Process.run ~prog:"tree" ~args:[ tmpdir ] ()
           >>| ok_exn
-          >>= fun stdout ->
+          >>| fun stdout ->
           let msg =
             sprintf
-              "Tree:\n%s\n\nOriginal:\n%s\n\nError:\n%s\n"
+              "Tree:\n%s\n\nOriginal:\n%s\n\nReified:\n\n%s\n"
               stdout
               (string_hum_of_path p)
-              (Error.to_string_hum e)
+              (string_hum_of_path q)
           in
-          assert_failure msg)
+          assert_failure msg
+        else return ()
       | Error e ->
-        let msg = sprintf "mkdir failure:\n\n%s\n" (Error.to_string_hum e) in
+        Process.run ~prog:"tree" ~args:[ tmpdir ] ()
+        >>| ok_exn
+        >>= fun stdout ->
+        let msg =
+          sprintf
+            "Tree:\n%s\n\nOriginal:\n%s\n\nError:\n%s\n"
+            stdout
+            (string_hum_of_path p)
+            (Error.to_string_hum e)
+        in
         assert_failure msg)
+    | Error e ->
+      let msg = sprintf "mkdir failure:\n\n%s\n" (Error.to_string_hum e) in
+      assert_failure msg)
 ;;
 
 let fold_follows_links_works_on_test_directory ctx =
@@ -589,7 +562,7 @@ let fold_follows_links_works_on_test_directory ctx =
   create_test_directory tmpdir_as_str
   >>= fun () ->
   Phat.fold_follows_links tmpdir ~init:[] ~f:(fun accu elt ->
-      return (map_elts elt :: accu))
+    return (map_elts elt :: accu))
   >>| function
   | Ok l ->
     assert_equal
