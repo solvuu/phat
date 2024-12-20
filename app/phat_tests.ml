@@ -22,7 +22,7 @@ let string_hum_of_path x = Sexp.to_string_hum (Phat.sexp_of_t x)
 let rec update_level
   : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.t -> int
   =
- fun ~root l -> function
+  fun ~root l -> function
   | Phat.Item i -> update_level_item ~root l i
   | Phat.Cons (h, t) ->
     let l' = update_level_item ~root l h in
@@ -31,7 +31,7 @@ let rec update_level
 and update_level_item
   : type k o. root:(Phat.abs, Phat.dir) Phat.t -> int -> (k, o) Phat.item -> int
   =
- fun ~root i -> function
+  fun ~root i -> function
   | Phat.Root -> 0
   | Phat.Dir _ -> i + 1
   | Phat.File _ -> i + 1
@@ -322,7 +322,7 @@ let filesys_exists ctx =
   let tmpdir = OUnit2.bracket_tmpdir ctx in
   let tmpdir_path = ok_exn (Phat.abs_dir tmpdir) in
   let check : type o. (Phat.rel, o) Phat.t -> unit Deferred.t =
-   fun p ->
+    fun p ->
     Phat.exists (Phat.concat tmpdir_path p)
     >>| function
     | `Yes -> ()
@@ -346,41 +346,41 @@ let filesys_exists_modulo_links ctx =
     let p = R.abs_dir_path ~link_level:4 ~root:tmpdir_path () in
     Phat.mkdir p
     >>= (function
-          | Ok () -> (
-            let q = Phat.abs_dir (Phat.to_string p) |> ok_exn in
-            Phat.exists q
-            >>| function
-            | `Yes_modulo_links -> ()
-            | `Yes ->
-              if Phat.has_link p
-              then (
-                let msg =
-                  sprintf
-                    "exists sees:\n\n%s\n\nas:\n\n%s\n"
-                    (string_hum_of_path p)
-                    (string_hum_of_path q)
-                in
-                assert_failure msg)
-              else ()
-            | `Yes_as_other_object ->
-              let msg =
-                sprintf
-                  "exists sees:\n\n%s\n\nas another object when given:\n\n%s\n"
-                  (string_hum_of_path p)
-                  (string_hum_of_path q)
-              in
-              assert_failure msg
-            | `No | `Unknown ->
-              let msg = sprintf "exists does not see:\n\n%s" (string_hum_of_path p) in
-              assert_failure msg)
-          | Error e ->
-            let msg =
-              sprintf
-                "mkdir failed to create path %s: %s"
-                (Sexp.to_string_hum (Phat.sexp_of_t p))
-                (Sexp.to_string_hum (Error.sexp_of_t e))
-            in
-            return (ignore (assert_failure msg)))
+     | Ok () -> (
+       let q = Phat.abs_dir (Phat.to_string p) |> ok_exn in
+       Phat.exists q
+       >>| function
+       | `Yes_modulo_links -> ()
+       | `Yes ->
+         if Phat.has_link p
+         then (
+           let msg =
+             sprintf
+               "exists sees:\n\n%s\n\nas:\n\n%s\n"
+               (string_hum_of_path p)
+               (string_hum_of_path q)
+           in
+           assert_failure msg)
+         else ()
+       | `Yes_as_other_object ->
+         let msg =
+           sprintf
+             "exists sees:\n\n%s\n\nas another object when given:\n\n%s\n"
+             (string_hum_of_path p)
+             (string_hum_of_path q)
+         in
+         assert_failure msg
+       | `No | `Unknown ->
+         let msg = sprintf "exists does not see:\n\n%s" (string_hum_of_path p) in
+         assert_failure msg)
+     | Error e ->
+       let msg =
+         sprintf
+           "mkdir failed to create path %s: %s"
+           (Sexp.to_string_hum (Phat.sexp_of_t p))
+           (Sexp.to_string_hum (Error.sexp_of_t e))
+       in
+       return (ignore (assert_failure msg)))
     >>= fun () -> Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir))
 ;;
 
@@ -397,39 +397,35 @@ let filesys_exists_as_other_object ctx =
     in
     Phat.mkdir p
     >>= (function
-          | Ok () -> (
-            let q = Phat.abs_file (Phat.to_string p) |> ok_exn in
-            Phat.exists q
-            >>| function
-            | `Yes_modulo_links | `Yes ->
-              let msg =
-                sprintf
-                  "exists does not see that:\n\n\
-                   %s\n\n\
-                   and:\n\n\
-                   %s\n\n\
-                   have different types\n"
-                  (string_hum_of_path p)
-                  (string_hum_of_path q)
-              in
-              assert_failure msg
-            | `Yes_as_other_object -> ()
-            | `No | `Unknown ->
-              let msg =
-                sprintf
-                  "exists does not see:\n\n%s\n\nwhen given:\n\n%s\n"
-                  (string_hum_of_path p)
-                  (string_hum_of_path q)
-              in
-              assert_failure msg)
-          | Error e ->
-            let msg =
-              sprintf
-                "mkdir failed to create path %s: %s"
-                (Sexp.to_string_hum (Phat.sexp_of_t p))
-                (Sexp.to_string_hum (Error.sexp_of_t e))
-            in
-            return (ignore (assert_failure msg)))
+     | Ok () -> (
+       let q = Phat.abs_file (Phat.to_string p) |> ok_exn in
+       Phat.exists q
+       >>| function
+       | `Yes_modulo_links | `Yes ->
+         let msg =
+           sprintf
+             "exists does not see that:\n\n%s\n\nand:\n\n%s\n\nhave different types\n"
+             (string_hum_of_path p)
+             (string_hum_of_path q)
+         in
+         assert_failure msg
+       | `Yes_as_other_object -> ()
+       | `No | `Unknown ->
+         let msg =
+           sprintf
+             "exists does not see:\n\n%s\n\nwhen given:\n\n%s\n"
+             (string_hum_of_path p)
+             (string_hum_of_path q)
+         in
+         assert_failure msg)
+     | Error e ->
+       let msg =
+         sprintf
+           "mkdir failed to create path %s: %s"
+           (Sexp.to_string_hum (Phat.sexp_of_t p))
+           (Sexp.to_string_hum (Error.sexp_of_t e))
+       in
+       return (ignore (assert_failure msg)))
     >>= fun () -> Sys.command_exn (sprintf "rm -rf %s ; mkdir -p %s" tmpdir tmpdir))
 ;;
 
