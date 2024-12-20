@@ -334,7 +334,8 @@ let filesys_exists ctx =
   in
   create_test_directory tmpdir
   >>= fun () ->
-  Deferred.List.iter test_directory_description ~f:(function PW p -> check p)
+  Deferred.List.iter ~how:`Sequential test_directory_description ~f:(function PW p ->
+      check p)
 ;;
 
 let filesys_exists_modulo_links ctx =
