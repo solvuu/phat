@@ -422,8 +422,8 @@ module WPS = struct
   open Wrapped_path
   include Set.Make (Wrapped_path)
 
-  let add set p = add set (P p)
-  let mem set p = mem set (P p)
+  let add set p = Set.add set (P p)
+  let mem set p = Set.mem set (P p)
 end
 
 (*
