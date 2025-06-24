@@ -9,11 +9,6 @@ Install by doing `opam install phat`. Then launch `utop`.
 # #require "phat";;
 ```
 
-The API is structured as one monolothic module. Look at the API documentation
-of [Path](https://github.com/solvuu/phat/blob/master/lib/base/phat_path.mli).
-Constructs therein are available directly under `Phat`. See below for a high
-level description of the main concepts.
-
 ## Quick Start - For Developers
 The only external dependency is [fnm](https://github.com/Schniz/fnm). Install
 that by reviewing the instructions on their page. Then clone this repo and:
