@@ -1,4 +1,4 @@
-open Core
+let failwithf = Base.Printf.failwithf
 
 module Result = struct
   include Result
@@ -54,4 +54,4 @@ module Or_error = struct
   let tag_loc loc x = tag_arg x "Location" loc Source_code_position.sexp_of_t
 end
 
-let errorh ?strict loc s x f = error ?strict s x f |> Or_error.tag_loc loc
+let errorh ?strict loc s x f = Or_error.error ?strict s x f |> Or_error.tag_loc loc
