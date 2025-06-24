@@ -92,4 +92,5 @@ Released under the ISC license. See the LICENSE file.
 
 ## Contact
 Please [post](https://github.com/solvuu/phat/issues) bug reports,
-feature requests, and questions as on GitHub.
+feature requests, and questions as on GitHub. Email opensource@solvuu.com
+to assure your request is noticed.
