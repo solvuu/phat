@@ -1,9 +1,10 @@
 (library
  (name phat)
  (public_name phat)
- (libraries core_kernel)
+ (libraries base)
  (preprocess
   (pps ppx_jane))
+ (flags :standard -w -39-67 -open Base)
  (synopsis "Strongly typed file path and file system operations."))
 
 (rule

@@ -1,7 +1,8 @@
 (** Extension of Core. Open this module after opening [Core] to
     extend Core with additional functionality.
 *)
-open Core
+
+val failwithf : ('a, unit, string, unit -> 'b) format4 -> 'a
 
 module Result : sig
   include module type of Result

@@ -1,4 +1,3 @@
-open Core
 open Import
 open Result.Monad_infix
 
@@ -131,7 +130,7 @@ let name s =
   else Ok s
 ;;
 
-let name_exn s = name s |> ok_exn
+let name_exn s = name s |> Or_error.ok_exn
 
 (******************************************************************************)
 (* Visitors                                                                   *)
