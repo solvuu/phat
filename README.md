@@ -2,17 +2,25 @@
 Phat, an anagram of "path", provides a strongly typed representation
 of file paths.
 
-## Quick Start
+## Quick Start - For Users
 Install by doing `opam install phat`. Then launch `utop`.
 
 ```ocaml
 # #require "phat";;
 ```
 
-The API is structured as one monolothic module. Look at the API documentation
-of [Path](https://github.com/solvuu/phat/blob/master/lib/base/phat_path.mli).
-Constructs therein are available directly under `Phat`. See below for a high
-level description of the main concepts.
+## Quick Start - For Developers
+The only external dependency is [fnm](https://github.com/Schniz/fnm). Install
+that by reviewing the instructions on their page. Then clone this repo and:
+
+```bash
+$ fnm use
+$ npm run install
+$ npm run start
+```
+
+This will install *all* dependencies, including the package manager esy and
+ocaml, and compile all the code in watch mode.
 
 ## File Paths
 Conceptually a path is a non-empty list of reserved items such as
@@ -84,4 +92,5 @@ Released under the ISC license. See the LICENSE file.
 
 ## Contact
 Please [post](https://github.com/solvuu/phat/issues) bug reports,
-feature requests, and questions as on GitHub.
+feature requests, and questions as on GitHub. Email opensource@solvuu.com
+to assure your request is noticed.

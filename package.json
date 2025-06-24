@@ -1,0 +1,29 @@
+{
+  "name": "phat",
+  "version": "0.1.0-dev",
+  "description": "Strongly type filepaths",
+  "esy": {
+    "build": "dune build --root #{self.root} --profile=dev @install",
+    "buildDev": "dune build --root #{self.root} --profile=dev @all",
+    "buildsInSource": "_build"
+  },
+  "scripts": {
+    "install": "npx -y esy@0.8.0 install",
+    "build": "npx -y esy@0.8.0 build",
+    "start": "npx -y esy@0.8.0 dune build @all --profile dev -w",
+    "utop": "npx -y esy@0.8.0 dune utop",
+    "clean": "rm -rf _build _build.prev",
+    "distclean": "npm run clean && rm -rf _esy node_modules"
+  },
+  "dependencies": {
+    "@opam/core_kernel": "*",
+    "@opam/dune": "*",
+    "ocaml": "5.2.0"
+  },
+  "devDependencies": {
+    "@opam/ocaml-lsp-server": "*",
+    "@opam/ocamlformat": "*",
+    "@opam/odoc": "*",
+    "@opam/utop": "*"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "ocaml.sandbox": {
+    "kind": "custom",
+    "template": "cd \"${firstWorkspaceFolder}\" && fnm exec --using $(cat .nvmrc) -- npx esy@0.8.0 $prog $args"
+  },
+  "editor.formatOnSave": true,
+  "[ocaml]": {
+    "editor.defaultFormatter": "ocamllabs.ocaml-platform"
+  },
+  "terminal.integrated.profiles.linux": {
+    "bash": {
+      "path": "/bin/bash",
+      "icon": "terminal-bash"
+    }
+  },
+  "terminal.integrated.defaultProfile.linux": "bash"
+}
