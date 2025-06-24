@@ -1,5 +1,5 @@
 open Core
-open Core2
+open Import
 open Result.Monad_infix
 
 (* Many functions not tail-recursive. Considered okay because paths
