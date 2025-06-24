@@ -1,24 +1,18 @@
 # [Phat](https://github.com/solvuu/phat)
 Phat, an anagram of "path", provides a strongly typed representation
-of file paths and file system operations.
+of file paths.
 
 ## Quick Start
 Install by doing `opam install phat`. Then launch `utop`.
 
 ```ocaml
-# #require "phat.async_unix";;
-# module Phat = Phat_async_unix.Std;;
+# #require "phat";;
 ```
 
-The API is structured as one monolothic module. Presently only the
-Async backend is fully developed, but future work will add support for
-Lwt and blocking APIs. Now take a look at the API documentation of
-[Path](https://github.com/solvuu/phat/blob/master/lib/base/phat_path.mli)
-and
-[Filesys](https://github.com/solvuu/phat/blob/master/lib/async_unix/filesys.mli). Both
-modules are included in `Std`, so constructs therein are available
-directly. Also see below for a high level description of the main
-concepts.
+The API is structured as one monolothic module. Look at the API documentation
+of [Path](https://github.com/solvuu/phat/blob/master/lib/base/phat_path.mli).
+Constructs therein are available directly under `Phat`. See below for a high
+level description of the main concepts.
 
 ## File Paths
 Conceptually a path is a non-empty list of reserved items such as
@@ -83,15 +77,7 @@ representations could be equal for paths not satisfying these
 criteria.
 
 ## Limitations
-* We currently only support Unix-like systems. The library is untested
-  on Windows, but we welcome pull requests.
-
-* Only an
-  [Async](https://github.com/janestreet/?utf8=%E2%9C%93&query=async)
-  version of file system operations are supported. There are no
-  blocking or [Lwt](http://ocsigen.org/lwt/) versions. However, the
-  code is already structured to extend to these cases. Let us know if
-  you need it, or better, please submit a pull request.
+* We currently only support Unix filepaths.
 
 ## License
 Released under the ISC license. See the LICENSE file.
