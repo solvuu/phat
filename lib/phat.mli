@@ -1,6 +1,3 @@
-(** Filesystem paths. *)
-open Core
-
 (** User chosen file or directory name. By "user chosen" we mean to
     exclude reserved names such as ".", "", "..", and "/". *)
 type name = private string [@@deriving sexp]
