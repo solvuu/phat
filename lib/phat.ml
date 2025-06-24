@@ -1,6 +1,5 @@
 open Import
 open Result.Monad_infix
-module About = About
 
 (* Many functions not tail-recursive. Considered okay because paths
    are unlikely to be very long.

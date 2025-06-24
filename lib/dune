@@ -6,23 +6,3 @@
   (pps ppx_jane))
  (flags :standard -w -39-67 -open Base)
  (synopsis "Strongly typed file path and file system operations."))
-
-(rule
- (targets GIT_COMMIT)
- (deps
-  (:x ../bin/git_commit.sh))
- (action
-  (with-stdout-to
-   %{targets}
-   (run %{x}))))
-
-(rule
- (targets about.ml)
- (deps
-  (:x about.ml.m4)
-  ../VERSION
-  GIT_COMMIT)
- (action
-  (with-stdout-to
-   %{targets}
-   (run m4 %{x}))))
