@@ -10,17 +10,17 @@ Install by doing `opam install phat`. Then launch `utop`.
 ```
 
 ## Quick Start - For Developers
-The only external dependency is [fnm](https://github.com/Schniz/fnm). Install
-that by reviewing the instructions on their page. Then clone this repo and:
+Build with [Dune](https://dune.build/). Clone this repo and:
 
 ```bash
-$ fnm use
-$ npm run install
-$ npm run start
+$ dune build
 ```
 
-This will install *all* dependencies, including the package manager esy and
-ocaml, and compile all the code in watch mode.
+To compile all the code in watch mode, run:
+
+```bash
+$ dune build -w
+```
 
 ## File Paths
 Conceptually a path is a non-empty list of reserved items such as
