@@ -1,7 +1,7 @@
 {
   "ocaml.sandbox": {
-    "kind": "custom",
-    "template": "cd \"${firstWorkspaceFolder}\" && fnm exec --using $(cat .nvmrc) -- npx esy@0.8.0 $prog $args"
+    "kind": "dune",
+    "root": "${firstWorkspaceFolder}"
   },
   "editor.formatOnSave": true,
   "[ocaml]": {
